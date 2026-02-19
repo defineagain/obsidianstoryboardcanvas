@@ -5,8 +5,9 @@
 // Arranges linked documents on Canvas: X=time, Y=arc,
 // with cross-link edges from [[wikilinks]].
 
-import { Plugin } from 'obsidian';
+import { Plugin, TFile } from 'obsidian';
 import { StoryboardCanvasManager } from './src/StoryboardCanvasManager';
+import { SetDateModal, SetArcModal, tagScene } from './src/taggingModals';
 
 export default class StoryboardCanvasPlugin extends Plugin {
   canvasManager: StoryboardCanvasManager;
@@ -14,7 +15,42 @@ export default class StoryboardCanvasPlugin extends Plugin {
   async onload(): Promise<void> {
     this.canvasManager = new StoryboardCanvasManager(this.app);
 
-    // ─── Commands ──────────────────────────────────────────
+    // ─── Tagging Commands (work on active markdown file) ──
+
+    this.addCommand({
+      id: 'storyboard-set-date',
+      name: 'Set story date on current note',
+      checkCallback: (checking: boolean) => {
+        const file = this.app.workspace.getActiveFile();
+        if (!file || file.extension !== 'md') return false;
+        if (!checking) new SetDateModal(this.app, file).open();
+        return true;
+      },
+    });
+
+    this.addCommand({
+      id: 'storyboard-set-arc',
+      name: 'Set story arc on current note',
+      checkCallback: (checking: boolean) => {
+        const file = this.app.workspace.getActiveFile();
+        if (!file || file.extension !== 'md') return false;
+        if (!checking) new SetArcModal(this.app, file).open();
+        return true;
+      },
+    });
+
+    this.addCommand({
+      id: 'storyboard-tag-scene',
+      name: 'Tag scene (set date + arc)',
+      checkCallback: (checking: boolean) => {
+        const file = this.app.workspace.getActiveFile();
+        if (!file || file.extension !== 'md') return false;
+        if (!checking) tagScene(this.app, file);
+        return true;
+      },
+    });
+
+    // ─── Canvas Commands (require active canvas view) ─────
 
     this.addCommand({
       id: 'storyboard-build',
