@@ -82,20 +82,68 @@ export function getAbstractDateFromMetadata(
     return [raw, ...padding];
   }
 
-  // Handle string values (normalize separators)
-  let str: string;
-  if (typeof raw === 'string') {
-    str = raw;
-  } else if (raw instanceof Date || (typeof raw === 'object' && raw.toString)) {
-    // Obsidian may parse YAML dates as Date objects
-    str = raw.toString();
-  } else {
-    str = String(raw);
+  // Handle JavaScript Date objects (YAML dates become these in Obsidian)
+  if (raw instanceof Date) {
+    return [raw.getFullYear(), raw.getMonth() + 1, raw.getDate()];
   }
 
-  // Normalize: replace slashes and dots with hyphens for consistent matching
+  // Handle objects with toISOString (another Date variant)
+  if (typeof raw === 'object' && typeof raw.toISOString === 'function') {
+    try {
+      const d = new Date(raw.toISOString());
+      return [d.getFullYear(), d.getMonth() + 1, d.getDate()];
+    } catch {
+      // fall through
+    }
+  }
+
+  // Handle string values
+  let str: string;
+  if (typeof raw === 'string') {
+    str = raw.trim();
+  } else {
+    str = String(raw).trim();
+  }
+
+  // Try ISO date string first (e.g. "2028-05-08T00:00:00.000Z")
+  const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    return [parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10), parseInt(isoMatch[3], 10)];
+  }
+
+  // Try slash-separated (e.g. "2026/4/10")
+  const slashMatch = str.match(/^(-?\d+)\/(\d{1,2})\/(\d{1,2})/);
+  if (slashMatch) {
+    return [parseInt(slashMatch[1], 10), parseInt(slashMatch[2], 10), parseInt(slashMatch[3], 10)];
+  }
+
+  // Try dot-separated (e.g. "2026.4.10")
+  const dotMatch = str.match(/^(-?\d+)\.(\d{1,2})\.(\d{1,2})/);
+  if (dotMatch) {
+    return [parseInt(dotMatch[1], 10), parseInt(dotMatch[2], 10), parseInt(dotMatch[3], 10)];
+  }
+
+  // Try Date.toString() format (e.g. "Wed May 08 2028 00:00:00 GMT...")
+  const dateStringMatch = str.match(/\w+ (\w+) (\d+) (\d{4})/);
+  if (dateStringMatch) {
+    const months: Record<string, number> = {
+      Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+      Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
+    };
+    const month = months[dateStringMatch[1]];
+    if (month) {
+      return [parseInt(dateStringMatch[3], 10), month, parseInt(dateStringMatch[2], 10)];
+    }
+  }
+
+  // Fallback: try the configurable regex with normalized input
   const normalized = str.replace(/[/.]/g, '-');
-  return parseAbstractDate(groups, normalized, settings.dateParserRegex);
+  const result = parseAbstractDate(groups, normalized, settings.dateParserRegex);
+  if (result) return result;
+
+  // Nothing worked — log so user can diagnose
+  console.warn(`[Storyboard Canvas] Could not parse '${key}' value:`, raw, `(type: ${typeof raw})`);
+  return undefined;
 }
 
 /**

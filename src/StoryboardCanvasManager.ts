@@ -64,12 +64,27 @@ export class StoryboardCanvasManager {
       if (!(file instanceof TFile)) continue;
 
       const metadata = this.app.metadataCache.getFileCache(file);
-      if (!metadata) continue;
+      if (!metadata) {
+        console.warn(`[Storyboard] No metadata cache for: ${file.path}`);
+        continue;
+      }
+
+      // Debug: log what we see in frontmatter
+      const rawDate = metadata.frontmatter?.['story-date'];
+      if (rawDate === undefined || rawDate === null) {
+        console.log(`[Storyboard] Skipping ${file.basename}: no story-date in frontmatter`);
+        continue;
+      }
+
+      console.log(`[Storyboard] ${file.basename}: story-date raw =`, rawDate, `(type: ${typeof rawDate}, isDate: ${rawDate instanceof Date})`);
 
       const date = getAbstractDateFromMetadata(
         metadata, 'story-date', this.dateSettings,
       );
-      if (!date) continue;
+      if (!date) {
+        console.warn(`[Storyboard] FAILED to parse story-date for: ${file.basename}, raw value:`, rawDate);
+        continue;
+      }
 
       const endDate = getAbstractDateFromMetadata(
         metadata, 'story-end-date', this.dateSettings,
@@ -77,6 +92,7 @@ export class StoryboardCanvasManager {
       const arc = getArcFromMetadata(metadata);
       const title = getTitleFromMetadata(metadata) || file.basename;
 
+      console.log(`[Storyboard] ✓ ${file.basename}: date=[${date}], arc="${arc}"`);
       events.push({ nodeId: id, file, date, endDate, arc, title });
     }
 
