@@ -69,20 +69,33 @@ export function getAbstractDateFromMetadata(
   key: string,
   settings: DateFormatSettings,
 ): AbstractDate | undefined {
+  if (!cachedMetadata.frontmatter) return undefined;
+
+  const raw = cachedMetadata.frontmatter[key];
+  if (raw === undefined || raw === null) return undefined;
+
   const groups = settings.dateParserGroupPriority.split(',');
 
-  // Try as number first (single-value dates)
-  const numberValue = getMetadataKey(cachedMetadata, key, 'number');
-  if (numberValue !== undefined) {
+  // Handle numbers (single-value dates like just a year)
+  if (typeof raw === 'number') {
     const padding = [...Array(Math.max(0, groups.length - 1))].map(() => 1);
-    return [numberValue, ...padding];
+    return [raw, ...padding];
   }
 
-  // Try as string
-  const stringValue = getMetadataKey(cachedMetadata, key, 'string');
-  if (!stringValue) return undefined;
+  // Handle string values (normalize separators)
+  let str: string;
+  if (typeof raw === 'string') {
+    str = raw;
+  } else if (raw instanceof Date || (typeof raw === 'object' && raw.toString)) {
+    // Obsidian may parse YAML dates as Date objects
+    str = raw.toString();
+  } else {
+    str = String(raw);
+  }
 
-  return parseAbstractDate(groups, stringValue, settings.dateParserRegex);
+  // Normalize: replace slashes and dots with hyphens for consistent matching
+  const normalized = str.replace(/[/.]/g, '-');
+  return parseAbstractDate(groups, normalized, settings.dateParserRegex);
 }
 
 /**

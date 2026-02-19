@@ -231,13 +231,121 @@ export class StoryboardCanvasManager {
 
   /**
    * One-shot: arrange by date/arc, connect chronologically, then
-   * add cross-link edges from [[wikilinks]].
+   * add cross-link edges from [[wikilinks]], and add visual markers.
    */
   async buildStoryboard(canvas: Canvas): Promise<void> {
+    // Diagnostics
+    const totalNodes = canvas.nodes.size;
+    const scenes = await this.extractScenes(canvas);
+    const skipped = totalNodes - scenes.length;
+
+    if (scenes.length === 0) {
+      new Notice(
+        `No scenes found. ${totalNodes} nodes on canvas but none have story-date frontmatter. ` +
+        `Use "Tag scene" command on each note first.`
+      );
+      return;
+    }
+
+    if (skipped > 0) {
+      new Notice(`Found ${scenes.length} tagged scenes (${skipped} nodes skipped — no story-date).`);
+    }
+
+    // Clean old markers before rebuilding
+    this.removeMarkerNodes(canvas);
+
     await this.sortStoryboard(canvas);
     await this.connectChronologically(canvas);
     await this.connectByLinks(canvas);
-    new Notice('Storyboard built: sorted, connected, cross-linked.');
+    this.addVisualMarkers(canvas, scenes);
+
+    new Notice(`Storyboard built: ${scenes.length} scenes, sorted + connected + labelled.`);
+  }
+
+  // ─── Visual Markers ──────────────────────────────────────
+
+  private readonly MARKER_PREFIX = 'storyboard-marker-';
+
+  /**
+   * Remove previously generated marker text nodes.
+   */
+  private removeMarkerNodes(canvas: Canvas): void {
+    const canvasData = canvas.getData();
+    canvasData.nodes = canvasData.nodes.filter(
+      (n: any) => !n.id?.startsWith(this.MARKER_PREFIX),
+    );
+    canvas.setData(canvasData);
+    canvas.requestSave();
+  }
+
+  /**
+   * Add arc lane labels on the left and date markers along the top.
+   */
+  private addVisualMarkers(canvas: Canvas, scenes: StoryEvent[]): void {
+    const canvasData = canvas.getData();
+
+    // Discover arc lanes and their Y positions from current node positions
+    const arcYPositions = new Map<string, number>();
+    const dateXPositions = new Map<string, number>(); // date label → X
+
+    for (const scene of scenes) {
+      const node = canvas.nodes.get(scene.nodeId);
+      if (!node) continue;
+      const data = node.getData();
+
+      // Track arc Y (use first occurrence)
+      if (!arcYPositions.has(scene.arc)) {
+        arcYPositions.set(scene.arc, data.y);
+      }
+
+      // Track unique dates and their X positions
+      const dateLabel = formatAbstractDate(scene.date, this.dateSettings);
+      if (!dateXPositions.has(dateLabel)) {
+        dateXPositions.set(dateLabel, data.x);
+      }
+    }
+
+    const labelWidth = 200;
+    const labelHeight = 60;
+    const headerY = Math.min(...arcYPositions.values()) - labelHeight - 80;
+
+    // Add arc lane labels (left side)
+    const minX = Math.min(...dateXPositions.values());
+    const labelX = minX - labelWidth - 60;
+    let arcIndex = 0;
+    for (const [arcName, y] of arcYPositions) {
+      const colors = ['1', '2', '3', '4', '5', '6']; // Obsidian canvas colors
+      canvasData.nodes.push({
+        id: `${this.MARKER_PREFIX}arc-${arcIndex}`,
+        type: 'text',
+        text: `## ${arcName}`,
+        x: labelX,
+        y: y + (this.layoutConfig.nodeHeight / 2) - (labelHeight / 2),
+        width: labelWidth,
+        height: labelHeight,
+        color: colors[arcIndex % colors.length],
+      } as any);
+      arcIndex++;
+    }
+
+    // Add date markers (top row)
+    let dateIndex = 0;
+    for (const [dateLabel, x] of dateXPositions) {
+      canvasData.nodes.push({
+        id: `${this.MARKER_PREFIX}date-${dateIndex}`,
+        type: 'text',
+        text: `**${dateLabel}**`,
+        x: x + (this.layoutConfig.nodeWidth / 2) - (labelWidth / 2),
+        y: headerY,
+        width: labelWidth,
+        height: labelHeight,
+        color: '0',
+      } as any);
+      dateIndex++;
+    }
+
+    canvas.setData(canvasData);
+    canvas.requestSave();
   }
 
   // ─── Playback ────────────────────────────────────────────

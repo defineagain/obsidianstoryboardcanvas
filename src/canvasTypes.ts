@@ -114,7 +114,7 @@ export interface DateFormatSettings {
 }
 
 export const DEFAULT_DATE_FORMAT_SETTINGS: DateFormatSettings = {
-  dateParserRegex: '(?<y>-?\\d+)-(?<M>\\d+)-(?<d>\\d+)',
+  dateParserRegex: '(?<y>-?\\d+)[-/.](?<M>\\d+)[-/.](?<d>\\d+)',
   dateParserGroupPriority: 'y,M,d',
   dateDisplayFormat: '{y}-{M}-{d}',
   dateTokenConfiguration: [
