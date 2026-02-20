@@ -111,6 +111,17 @@ export default class StoryboardCanvasPlugin extends Plugin {
         return true;
       },
     });
+
+    this.addCommand({
+      id: 'storyboard-sync',
+      name: 'Sync canvas to notes',
+      checkCallback: (checking: boolean) => {
+        const canvas = this.canvasManager.getActiveCanvas();
+        if (!canvas) return false;
+        if (!checking) this.canvasManager.syncStoryboard(canvas);
+        return true;
+      },
+    });
   }
 
   async loadSettings() {
