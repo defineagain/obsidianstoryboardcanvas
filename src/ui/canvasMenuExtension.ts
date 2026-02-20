@@ -54,7 +54,7 @@ function injectMenuButton(menuEl: HTMLElement, plugin: StoryboardCanvasPlugin) {
   btn.addClass('canvas-node-menu-item');
   btn.addClass('storyboard-menu-btn');
   btn.setAttribute('aria-label', 'Set story-date');
-  setIcon(btn, 'calendar-clock');
+  setIcon(btn, 'calendar');
 
   btn.addEventListener('click', () => {
     // Open date modal for this specific node

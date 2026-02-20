@@ -28,7 +28,7 @@ export default class StoryboardCanvasPlugin extends Plugin {
       (leaf) => new StoryboardInspectorView(leaf, this)
     );
 
-    this.addRibbonIcon('clapperboard', 'Open Storyboard Inspector', () => {
+    this.addRibbonIcon('list', 'Open Storyboard Inspector', () => {
       this.activateInspectorView();
     });
 

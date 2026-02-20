@@ -29,7 +29,7 @@ export class StoryboardInspectorView extends ItemView {
   }
 
   getIcon() {
-    return 'clapperboard';
+    return 'list';
   }
 
   async onOpen() {
