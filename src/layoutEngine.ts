@@ -25,16 +25,19 @@ export function compareAbstractDates(a: AbstractDate, b: AbstractDate): number {
 
 /**
  * Flatten an AbstractDate into a single sortable ordinal number.
- * Uses weighted positional encoding: each segment is multiplied by
- * a decreasing power of a large base (10000) to preserve ordering.
- *
- * For [year, month, day]: year * 10000^2 + month * 10000 + day
+ * We approximate real time spans to prevent the canvas X-axis from exploding.
+ * Last segment = Days (x1)
+ * 2nd to last = Months (x30)
+ * 3rd to last = Years (x365)
+ * 4th to last = Ages (x365000)
  */
 export function dateToOrdinal(date: AbstractDate): number {
-  const BASE = 10000;
+  const multipliers = [1, 30, 365, 365000, 365000000];
   let ordinal = 0;
   for (let i = 0; i < date.length; i++) {
-    ordinal += date[i] * Math.pow(BASE, date.length - 1 - i);
+    const fromEnd = date.length - 1 - i;
+    const mult = multipliers[fromEnd] ?? Math.pow(10, fromEnd + 2);
+    ordinal += (date[i] ?? 0) * mult;
   }
   return ordinal;
 }

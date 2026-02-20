@@ -99,7 +99,7 @@ export interface LayoutConfig {
 
 export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   layoutMode: 'absolute',
-  xScale: 200,
+  xScale: 10,
   arcSpacing: 500,
   nodeWidth: 400,
   nodeHeight: 300,
