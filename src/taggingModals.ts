@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════
 
 import { App, Modal, Notice, Setting, SuggestModal, TFile } from 'obsidian';
+import type StoryboardCanvasPlugin from '../main';
 
 // ─── Frontmatter Helpers ─────────────────────────────────────
 
@@ -46,14 +47,16 @@ export class SetDateModal extends Modal {
   private file: TFile;
   private onComplete: () => void;
   private value: string;
+  private plugin: StoryboardCanvasPlugin;
 
-  constructor(app: App, file: TFile, onComplete: () => void = () => {}) {
-    super(app);
+  constructor(plugin: StoryboardCanvasPlugin, file: TFile, onComplete: () => void = () => {}) {
+    super(plugin.app);
+    this.plugin = plugin;
     this.file = file;
     this.onComplete = onComplete;
 
     // Pre-populate from existing frontmatter
-    const cache = app.metadataCache.getFileCache(file);
+    const cache = plugin.app.metadataCache.getFileCache(file);
     this.value = cache?.frontmatter?.['story-date']?.toString() ?? '';
   }
 
@@ -93,6 +96,15 @@ export class SetDateModal extends Modal {
       new Notice('Date cannot be empty.');
       return;
     }
+
+    // Validate against parser regex
+    const regex = this.plugin.settings.dateSettings.dateParserRegex;
+    const match = new RegExp(regex).test(trimmed);
+    if (!match) {
+      new Notice(`Invalid date format. Needs to match regex:\n${regex}`);
+      return;
+    }
+
     await setFrontmatterKey(this.app, this.file, 'story-date', trimmed);
     new Notice(`Set story-date: ${trimmed}`);
     this.close();
@@ -109,9 +121,11 @@ export class SetDateModal extends Modal {
 export class SetArcModal extends SuggestModal<string> {
   private file: TFile;
   private onComplete: () => void;
+  private plugin: StoryboardCanvasPlugin;
 
-  constructor(app: App, file: TFile, onComplete: () => void = () => {}) {
-    super(app);
+  constructor(plugin: StoryboardCanvasPlugin, file: TFile, onComplete: () => void = () => {}) {
+    super(plugin.app);
+    this.plugin = plugin;
     this.file = file;
     this.onComplete = onComplete;
     this.setPlaceholder('Type an arc name or select existing...');
@@ -160,8 +174,8 @@ export class SetArcModal extends SuggestModal<string> {
 /**
  * Two-step tagging: date first, then arc.
  */
-export function tagScene(app: App, file: TFile): void {
-  new SetDateModal(app, file, () => {
-    new SetArcModal(app, file).open();
+export function tagScene(plugin: StoryboardCanvasPlugin, file: TFile): void {
+  new SetDateModal(plugin, file, () => {
+    new SetArcModal(plugin, file).open();
   }).open();
 }

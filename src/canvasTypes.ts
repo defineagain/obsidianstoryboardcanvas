@@ -83,6 +83,8 @@ export interface ArcConfig {
 // ─── Layout Configuration ────────────────────────────────────
 
 export interface LayoutConfig {
+  /** Layout mode: 'absolute' (time graph) or 'ordered' (sequential grid). */
+  layoutMode: 'absolute' | 'ordered';
   /** Pixels per date ordinal unit. */
   xScale: number;
   /** Y-axis gap between arc lanes. */
@@ -96,6 +98,7 @@ export interface LayoutConfig {
 }
 
 export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
+  layoutMode: 'absolute',
   xScale: 200,
   arcSpacing: 500,
   nodeWidth: 400,

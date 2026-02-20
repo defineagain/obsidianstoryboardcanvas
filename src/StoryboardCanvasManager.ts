@@ -24,13 +24,13 @@ function randomId(length: number = 16): string {
 
 export class StoryboardCanvasManager {
   private app: App;
-  private layoutConfig: LayoutConfig;
-  private dateSettings: DateFormatSettings;
+  public dateSettings: DateFormatSettings;
+  public layoutConfig: LayoutConfig;
 
   constructor(
     app: App,
-    layoutConfig: LayoutConfig = DEFAULT_LAYOUT_CONFIG,
     dateSettings: DateFormatSettings = DEFAULT_DATE_FORMAT_SETTINGS,
+    layoutConfig: LayoutConfig = DEFAULT_LAYOUT_CONFIG,
   ) {
     this.app = app;
     this.layoutConfig = layoutConfig;
@@ -360,8 +360,51 @@ export class StoryboardCanvasManager {
       dateIndex++;
     }
 
+    // Add per-node date labels (directly above each file node)
+    const nodeLabelHeight = 40;
+    for (const scene of scenes) {
+      const node = canvas.nodes.get(scene.nodeId);
+      if (!node) continue;
+      const data = node.getData();
+      const dateLabel = formatAbstractDate(scene.date, this.dateSettings);
+
+      canvasData.nodes.push({
+        id: `${this.MARKER_PREFIX}nodelabel-${scene.nodeId}`,
+        type: 'text',
+        text: dateLabel,
+        x: data.x,
+        y: data.y - nodeLabelHeight - 10,
+        width: this.layoutConfig.nodeWidth,
+        height: nodeLabelHeight,
+        color: '0',
+      } as any);
+    }
+
     canvas.setData(canvasData);
     canvas.requestSave();
+  }
+
+  // ─── Sync ────────────────────────────────────────────────
+  
+  async syncStoryboard(canvas: Canvas): Promise<void> {
+    const scenes = await this.extractScenes(canvas);
+    if (scenes.length === 0) {
+      new Notice('No scenes with story-date found.');
+      return;
+    }
+    
+    const { calculateSyncChanges, SyncConfirmationModal } = await import('./syncEngine');
+    const changes = await calculateSyncChanges(this.app, canvas, scenes, this.layoutConfig, this.dateSettings);
+    
+    if (changes.length === 0) {
+      new Notice('No drag-and-drop changes detected.');
+      return;
+    }
+    
+    new SyncConfirmationModal(this.app, changes, this.dateSettings, () => {
+      // Rebuild the sorted storyboard after applying changes
+      this.buildStoryboard(canvas);
+    }).open();
   }
 
   // ─── Playback ────────────────────────────────────────────

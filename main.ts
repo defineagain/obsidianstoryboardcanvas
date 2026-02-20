@@ -8,12 +8,17 @@
 import { Plugin, TFile } from 'obsidian';
 import { StoryboardCanvasManager } from './src/StoryboardCanvasManager';
 import { SetDateModal, SetArcModal, tagScene } from './src/taggingModals';
+import { DEFAULT_SETTINGS, StoryboardSettingTab, type StoryboardSettings } from './src/settings';
 
 export default class StoryboardCanvasPlugin extends Plugin {
   canvasManager: StoryboardCanvasManager;
+  settings: StoryboardSettings;
 
   async onload(): Promise<void> {
-    this.canvasManager = new StoryboardCanvasManager(this.app);
+    await this.loadSettings();
+
+    this.canvasManager = new StoryboardCanvasManager(this.app, this.settings.dateSettings, this.settings.layoutConfig);
+    this.addSettingTab(new StoryboardSettingTab(this.app, this));
 
     // ─── Tagging Commands (work on active markdown file) ──
 
@@ -23,7 +28,7 @@ export default class StoryboardCanvasPlugin extends Plugin {
       checkCallback: (checking: boolean) => {
         const file = this.app.workspace.getActiveFile();
         if (!file || file.extension !== 'md') return false;
-        if (!checking) new SetDateModal(this.app, file).open();
+        if (!checking) new SetDateModal(this, file).open();
         return true;
       },
     });
@@ -34,7 +39,7 @@ export default class StoryboardCanvasPlugin extends Plugin {
       checkCallback: (checking: boolean) => {
         const file = this.app.workspace.getActiveFile();
         if (!file || file.extension !== 'md') return false;
-        if (!checking) new SetArcModal(this.app, file).open();
+        if (!checking) new SetArcModal(this, file).open();
         return true;
       },
     });
@@ -45,7 +50,7 @@ export default class StoryboardCanvasPlugin extends Plugin {
       checkCallback: (checking: boolean) => {
         const file = this.app.workspace.getActiveFile();
         if (!file || file.extension !== 'md') return false;
-        if (!checking) tagScene(this.app, file);
+        if (!checking) tagScene(this, file);
         return true;
       },
     });
@@ -106,5 +111,19 @@ export default class StoryboardCanvasPlugin extends Plugin {
         return true;
       },
     });
+  }
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
+    
+    // Update canvas manager config
+    if (this.canvasManager) {
+      this.canvasManager.dateSettings = this.settings.dateSettings;
+      this.canvasManager.layoutConfig = this.settings.layoutConfig;
+    }
   }
 }

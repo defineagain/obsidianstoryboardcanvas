@@ -102,16 +102,21 @@ export function calculateLayout(
     const event = sorted[i];
     const arcIndex = arcOrder.indexOf(event.arc);
 
-    // X from date
-    let x = (ordinals[i] - minOrdinal) * config.xScale;
-
-    // Enforce minimum gap from previous node in same arc
-    const lastX = lastXPerArc.get(event.arc);
-    if (lastX !== undefined) {
-      const minX = lastX + config.nodeWidth + config.nodeGapX;
-      if (x < minX) x = minX;
+    let x: number;
+    if (config.layoutMode === 'ordered') {
+      // Ordered sequence: even spacing regardless of time gaps
+      x = i * (config.nodeWidth + config.nodeGapX * 2);
+    } else {
+      // Absolute time graph: scaled by date ordinal
+      x = (ordinals[i] - minOrdinal) * config.xScale;
+      // Enforce minimum gap from previous node in same arc
+      const lastX = lastXPerArc.get(event.arc);
+      if (lastX !== undefined) {
+        const minX = lastX + config.nodeWidth + config.nodeGapX;
+        if (x < minX) x = minX;
+      }
+      lastXPerArc.set(event.arc, x);
     }
-    lastXPerArc.set(event.arc, x);
 
     // Y from arc
     const y = arcIndex * config.arcSpacing;
