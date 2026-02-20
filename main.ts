@@ -5,10 +5,12 @@
 // Arranges linked documents on Canvas: X=time, Y=arc,
 // with cross-link edges from [[wikilinks]].
 
-import { Plugin, TFile } from 'obsidian';
+import { Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import { StoryboardCanvasManager } from './src/StoryboardCanvasManager';
 import { SetDateModal, SetArcModal, tagScene } from './src/taggingModals';
 import { DEFAULT_SETTINGS, StoryboardSettingTab, type StoryboardSettings } from './src/settings';
+import { StoryboardInspectorView, INSPECTOR_VIEW_TYPE } from './src/ui/StoryboardInspectorView';
+import { installCanvasMenuExtension, uninstallCanvasMenuExtension } from './src/ui/canvasMenuExtension';
 
 export default class StoryboardCanvasPlugin extends Plugin {
   canvasManager: StoryboardCanvasManager;
@@ -19,6 +21,18 @@ export default class StoryboardCanvasPlugin extends Plugin {
 
     this.canvasManager = new StoryboardCanvasManager(this.app, this.settings.dateSettings, this.settings.layoutConfig);
     this.addSettingTab(new StoryboardSettingTab(this.app, this));
+
+    // ─── UI Enhancements ──
+    this.registerView(
+      INSPECTOR_VIEW_TYPE,
+      (leaf) => new StoryboardInspectorView(leaf, this)
+    );
+
+    this.addRibbonIcon('clapperboard', 'Open Storyboard Inspector', () => {
+      this.activateInspectorView();
+    });
+
+    installCanvasMenuExtension(this);
 
     // ─── Tagging Commands (work on active markdown file) ──
 
@@ -136,5 +150,30 @@ export default class StoryboardCanvasPlugin extends Plugin {
       this.canvasManager.dateSettings = this.settings.dateSettings;
       this.canvasManager.layoutConfig = this.settings.layoutConfig;
     }
+  }
+
+  async activateInspectorView() {
+    const { workspace } = this.app;
+    let leaf: WorkspaceLeaf | null = null;
+    const leaves = workspace.getLeavesOfType(INSPECTOR_VIEW_TYPE);
+
+    if (leaves.length > 0) {
+      // A leaf with our view already exists, use that
+      leaf = leaves[0];
+    } else {
+      // Create a new leaf in the right sidebar
+      leaf = workspace.getRightLeaf(false);
+      if (leaf) {
+        await leaf.setViewState({ type: INSPECTOR_VIEW_TYPE, active: true });
+      }
+    }
+
+    if (leaf) {
+      workspace.revealLeaf(leaf);
+    }
+  }
+
+  onunload() {
+    uninstallCanvasMenuExtension();
   }
 }
