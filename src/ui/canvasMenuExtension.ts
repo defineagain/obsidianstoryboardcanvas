@@ -3,28 +3,7 @@ import type StoryboardCanvasPlugin from '../../main';
 import { SetDateModal } from '../taggingModals';
 import { CanvasNode } from '../Canvas';
 
-let menuInterval: number | null = null;
-
-export function installCanvasMenuExtension(plugin: StoryboardCanvasPlugin) {
-  if (menuInterval) return;
-
-  menuInterval = window.setInterval(() => {
-    // Obsidian drops this floating menu directly into body
-    const menuEl = document.body.querySelector('.canvas-node-menu') as HTMLElement;
-    if (menuEl) {
-      injectMenuButton(menuEl, plugin);
-    }
-  }, 250);
-}
-
-export function uninstallCanvasMenuExtension() {
-  if (menuInterval !== null) {
-    window.clearInterval(menuInterval);
-    menuInterval = null;
-  }
-}
-
-function injectMenuButton(menuEl: HTMLElement, plugin: StoryboardCanvasPlugin) {
+export function injectCanvasMenuButton(menuEl: HTMLElement, plugin: StoryboardCanvasPlugin) {
   // Check if we are in a canvas view
   const canvas = plugin.canvasManager.getActiveCanvas();
   if (!canvas) return;

@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Notice, Setting, debounce } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, Setting } from 'obsidian';
 import type StoryboardCanvasPlugin from '../../main';
 import { CanvasNode } from '../Canvas';
 import { getAbstractDateFromMetadata } from '../dateParser';
@@ -9,7 +9,6 @@ export const INSPECTOR_VIEW_TYPE = 'storyboard-inspector-view';
 
 export class StoryboardInspectorView extends ItemView {
   plugin: StoryboardCanvasPlugin;
-  pollInterval: number | null = null;
   activeNodeId: string | null = null;
 
   container: HTMLDivElement;
@@ -41,16 +40,10 @@ export class StoryboardInspectorView extends ItemView {
     this.container = containerEl.createDiv({ cls: 'inspector-content' });
 
     this.renderEmptyState();
-
-    // Poll selection every 300ms
-    this.pollInterval = window.setInterval(() => this.pollSelection(), 300);
   }
 
   async onClose() {
-    if (this.pollInterval !== null) {
-      window.clearInterval(this.pollInterval);
-      this.pollInterval = null;
-    }
+    this.container.empty();
   }
 
   renderEmptyState() {
@@ -63,6 +56,11 @@ export class StoryboardInspectorView extends ItemView {
   }
 
   pollSelection() {
+    // DO NOT re-render if the user is actively typing in one of our input fields!
+    if (this.container?.contains(document.activeElement)) {
+      return; 
+    }
+
     const canvas = this.plugin.canvasManager.getActiveCanvas();
     if (!canvas) {
       if (this.activeNodeId !== null) this.renderEmptyState();
@@ -194,8 +192,10 @@ export class StoryboardInspectorView extends ItemView {
       slider.max = (currentX + 1000).toString();
       slider.value = currentX.toString();
 
-      // Trigger the sync engine to recalculate date based on new X
-      new Notice('Calculating new date from slider position...');
+      // Trigger the sync engine ONLY for this specific node
+      new Notice('Slider released. Updating node date...');
+      
+      // Calculate new date based on new position relative to others
       await this.plugin.canvasManager.syncStoryboard(canvas);
     });
   }

@@ -40,7 +40,7 @@ export class StoryboardCanvasManager {
   // ─── Canvas Access ───────────────────────────────────────
 
   getActiveCanvas(): Canvas | null {
-    const leaf = this.app.workspace.activeLeaf;
+    const leaf = this.app.workspace.getMostRecentLeaf();
     if (!leaf) return null;
     const view = leaf.view as any;
     if (view?.getViewType?.() !== 'canvas') return null;

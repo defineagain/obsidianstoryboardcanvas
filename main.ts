@@ -10,36 +10,30 @@ import { StoryboardCanvasManager } from './src/StoryboardCanvasManager';
 import { SetDateModal, SetArcModal, tagScene } from './src/taggingModals';
 import { DEFAULT_SETTINGS, StoryboardSettingTab, type StoryboardSettings } from './src/settings';
 import { StoryboardInspectorView, INSPECTOR_VIEW_TYPE } from './src/ui/StoryboardInspectorView';
-import { installCanvasMenuExtension, uninstallCanvasMenuExtension } from './src/ui/canvasMenuExtension';
+import { registerCanvasHooks } from './src/canvasHooks';
 
 export default class StoryboardCanvasPlugin extends Plugin {
   canvasManager: StoryboardCanvasManager;
   settings: StoryboardSettings;
 
   async onload(): Promise<void> {
-    console.log('[Storyboard Canvas] v0.4.3 - Plugin loading started...');
     await this.loadSettings();
 
     this.canvasManager = new StoryboardCanvasManager(this.app, this.settings.dateSettings, this.settings.layoutConfig);
     this.addSettingTab(new StoryboardSettingTab(this.app, this));
-    console.log('[Storyboard Canvas] Settings Tab registered.');
 
     // ─── UI Enhancements ──
-    console.log('[Storyboard Canvas] Registering Inspector View...');
     this.registerView(
       INSPECTOR_VIEW_TYPE,
       (leaf) => new StoryboardInspectorView(leaf, this)
     );
 
-    console.log('[Storyboard Canvas] Adding Ribbon Icon...');
     this.addRibbonIcon('list', 'Open Storyboard Inspector', () => {
       this.activateInspectorView();
     });
 
-    console.log('[Storyboard Canvas] Installing Canvas Menu Extension...');
-    installCanvasMenuExtension(this);
-    
-    console.log('[Storyboard Canvas] UI Enhancements successfully loaded.');
+    // Native Obsidian Canvas Prototype Hooks (monkey-around)
+    registerCanvasHooks(this);
 
     // ─── Tagging Commands (work on active markdown file) ──
 
@@ -181,6 +175,7 @@ export default class StoryboardCanvasPlugin extends Plugin {
   }
 
   onunload() {
-    uninstallCanvasMenuExtension();
+    // Note: Monkey-around hooks are automatically cleaned up 
+    // because they are registered via this.register()
   }
 }
