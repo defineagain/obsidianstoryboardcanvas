@@ -1,0 +1,30 @@
+/* Storyboard Canvas - Phase 5 Enhancements */
+
+.storyboard-inspector-view .inspector-content {
+  padding: 10px;
+}
+
+/* Timeline Nudge Slider Styling */
+.timeline-slider-header {
+  margin-top: 24px;
+  margin-bottom: 4px;
+}
+
+.timeline-slider-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 15px 0;
+}
+
+.timeline-slider-container input[type="range"] {
+  width: 80%;
+  cursor: ew-resize;
+}
+
+/* Enhancing Setting spacing */
+.storyboard-inspector-view .setting-item {
+  border-top: none;
+  padding: 12px 0;
+}

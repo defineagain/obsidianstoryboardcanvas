@@ -3,7 +3,7 @@ import type StoryboardCanvasPlugin from '../../main';
 import { CanvasNode } from '../Canvas';
 import { getAbstractDateFromMetadata } from '../dateParser';
 import { formatAbstractDate } from '../dateFormatter';
-import { setFrontmatterKey } from '../taggingModals';
+import { setFrontmatterKey, collectFrontmatterValues } from '../taggingModals';
 
 export const INSPECTOR_VIEW_TYPE = 'storyboard-inspector-view';
 
@@ -113,34 +113,102 @@ export class StoryboardInspectorView extends ItemView {
       currentDateRaw = formatAbstractDate(abstractDate, this.plugin.settings.dateSettings);
     }
 
-    // --- Arc Editor ---
-    new Setting(this.container)
-      .setName('Story Arc')
-      .setDesc('Which lane or plotline this scene belongs to.')
-      .addText(text => {
-        text.setValue(currentArc)
-            .setPlaceholder('e.g. Main Plot');
+    // ─── Phase 5: Calculate Bounding Dates ───
+    let boundsStr = 'Format must match plugin settings regex.';
+    const canvas = this.plugin.canvasManager.getActiveCanvas();
+    try {
+      if (currentArc && currentDateRaw && canvas) {
+        const scenes = await this.plugin.canvasManager.extractScenes(canvas);
+        const arcScenes = scenes
+          .filter(s => s.arc === currentArc)
+          .sort((a, b) => {
+             // AbstractDate is number[] (e.g. [year, month, day])
+             const len = Math.max(a.date.length, b.date.length);
+             for (let i = 0; i < len; i++) {
+                 const aVal = a.date[i] || 0;
+                 const bVal = b.date[i] || 0;
+                 if (aVal !== bVal) return aVal - bVal;
+             }
+             return 0;
+          });
+          
+        const myIndex = arcScenes.findIndex(s => s.nodeId === node.getData().id);
+        if (myIndex !== -1) {
+          const prevDate = myIndex > 0 ? formatAbstractDate(arcScenes[myIndex - 1].date, this.plugin.settings.dateSettings) : 'None';
+          const nextDate = myIndex < arcScenes.length - 1 ? formatAbstractDate(arcScenes[myIndex + 1].date, this.plugin.settings.dateSettings) : 'None';
+          boundsStr = `Preceding: ${prevDate}\nProceeding: ${nextDate}`;
+        }
+      }
+    } catch(e) { /* ignore extraction errors safely */ }
 
-        const saveArc = async () => {
-          const val = text.getValue();
+    // --- Arc Editor ---
+    const arcSetting = new Setting(this.container)
+      .setName('Story Arc')
+      .setDesc('Which lane or plotline this scene belongs to.');
+
+    const renderArcDropdown = () => {
+      arcSetting.clear();
+      arcSetting.setName('Story Arc').setDesc('Which lane or plotline this scene belongs to.');
+      arcSetting.addDropdown(drop => {
+        const existingArcs = collectFrontmatterValues(this.app, 'story-arc');
+        
+        drop.addOption('', '-- Select an Arc --');
+        existingArcs.forEach(a => drop.addOption(a, a));
+        drop.addOption('__CREATE__', '+ Create New Arc...');
+
+        if (existingArcs.includes(currentArc)) {
+          drop.setValue(currentArc);
+        } else if (currentArc) {
+          drop.addOption(currentArc, currentArc);
+          drop.setValue(currentArc);
+        }
+
+        drop.onChange(async (val) => {
+          if (val === '__CREATE__') {
+            renderArcTextInput(); // Morph into text input mode
+            return;
+          }
           if (val !== currentArc) {
             await setFrontmatterKey(this.app, node.file!, 'story-arc', val);
           }
-        };
+        });
+      });
+    };
 
+    const renderArcTextInput = () => {
+      arcSetting.clear();
+      arcSetting.setName('New Story Arc').setDesc('Type a new lane name, then press Enter.');
+      arcSetting.addText(text => {
+        text.setPlaceholder('e.g. Subplot B');
+        const saveArc = async () => {
+          const val = text.getValue().trim();
+          if (val && val !== currentArc) {
+            await setFrontmatterKey(this.app, node.file!, 'story-arc', val);
+          }
+        };
         text.inputEl.addEventListener('blur', saveArc);
         text.inputEl.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             saveArc();
-            text.inputEl.blur(); // remove focus visually confirming save
+            text.inputEl.blur(); 
+            // Return to dropdown mode after saving
+            setTimeout(() => { this.pollSelection(); }, 50); 
+          }
+          if (e.key === 'Escape') {
+            renderArcDropdown(); // Cancel creation
           }
         });
+        setTimeout(() => text.inputEl.focus(), 50);
       });
+    };
+
+    // Default to dropdown mode
+    renderArcDropdown();
 
     // --- Date String Editor ---
     new Setting(this.container)
       .setName('Story Date')
-      .setDesc('Format must match plugin settings regex.')
+      .setDesc(boundsStr)
       .addText(text => {
         text.setValue(currentDateRaw)
             .setPlaceholder('YYYY-MM-DD');
@@ -183,13 +251,11 @@ export class StoryboardInspectorView extends ItemView {
     slider.max = (startX + 1000).toString();
     slider.value = startX.toString();
 
-    const canvas = this.plugin.canvasManager.getActiveCanvas()!;
-
     // Input fires continuously while dragging
     slider.addEventListener('input', () => {
       const newX = parseInt(slider.value, 10);
       node.setData({ ...node.getData(), x: newX });
-      canvas.requestSave();
+      if(canvas) canvas.requestSave();
     });
 
     // Change fires on mouse release
@@ -204,7 +270,7 @@ export class StoryboardInspectorView extends ItemView {
       new Notice('Slider released. Updating node date...');
       
       // Calculate new date based on new position relative to others
-      await this.plugin.canvasManager.syncStoryboard(canvas);
+      if(canvas) await this.plugin.canvasManager.syncStoryboard(canvas);
     });
   }
 }
