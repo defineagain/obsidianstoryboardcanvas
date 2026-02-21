@@ -134,9 +134,13 @@ export class StoryboardInspectorView extends ItemView {
           
         const myIndex = arcScenes.findIndex(s => s.nodeId === node.getData().id);
         if (myIndex !== -1) {
-          const prevDate = myIndex > 0 ? formatAbstractDate(arcScenes[myIndex - 1].date, this.plugin.settings.dateSettings) : 'None';
-          const nextDate = myIndex < arcScenes.length - 1 ? formatAbstractDate(arcScenes[myIndex + 1].date, this.plugin.settings.dateSettings) : 'None';
-          boundsStr = `Preceding: ${prevDate}\nProceeding: ${nextDate}`;
+          const prev = myIndex > 0 ? arcScenes[myIndex - 1] : null;
+          const next = myIndex < arcScenes.length - 1 ? arcScenes[myIndex + 1] : null;
+          
+          const prevStr = prev ? `${prev.title} (${formatAbstractDate(prev.date, this.plugin.settings.dateSettings)})` : 'None';
+          const nextStr = next ? `${next.title} (${formatAbstractDate(next.date, this.plugin.settings.dateSettings)})` : 'None';
+          
+          boundsStr = `Preceding: ${prevStr}\nProceeding: ${nextStr}`;
         }
       }
     } catch(e) { /* ignore extraction errors safely */ }
