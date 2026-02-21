@@ -17,22 +17,29 @@ export default class StoryboardCanvasPlugin extends Plugin {
   settings: StoryboardSettings;
 
   async onload(): Promise<void> {
+    console.log('[Storyboard Canvas] v0.4.3 - Plugin loading started...');
     await this.loadSettings();
 
     this.canvasManager = new StoryboardCanvasManager(this.app, this.settings.dateSettings, this.settings.layoutConfig);
     this.addSettingTab(new StoryboardSettingTab(this.app, this));
+    console.log('[Storyboard Canvas] Settings Tab registered.');
 
     // ─── UI Enhancements ──
+    console.log('[Storyboard Canvas] Registering Inspector View...');
     this.registerView(
       INSPECTOR_VIEW_TYPE,
       (leaf) => new StoryboardInspectorView(leaf, this)
     );
 
+    console.log('[Storyboard Canvas] Adding Ribbon Icon...');
     this.addRibbonIcon('list', 'Open Storyboard Inspector', () => {
       this.activateInspectorView();
     });
 
+    console.log('[Storyboard Canvas] Installing Canvas Menu Extension...');
     installCanvasMenuExtension(this);
+    
+    console.log('[Storyboard Canvas] UI Enhancements successfully loaded.');
 
     // ─── Tagging Commands (work on active markdown file) ──
 
