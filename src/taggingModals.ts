@@ -169,13 +169,129 @@ export class SetArcModal extends SuggestModal<string> {
   }
 }
 
+// ─── Set Dependencies Modal ────────────────────────────────────
+
+export class SetDependenciesModal extends SuggestModal<TFile> {
+  private file: TFile;
+  private onComplete: () => void;
+  private plugin: StoryboardCanvasPlugin;
+  private allFiles: TFile[];
+
+  constructor(plugin: StoryboardCanvasPlugin, file: TFile, onComplete: () => void = () => {}) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.file = file;
+    this.onComplete = onComplete;
+    this.allFiles = this.app.vault.getMarkdownFiles().filter(f => f.path !== file.path);
+    this.setPlaceholder('Select a file to depend on (or ESC to skip)...');
+  }
+
+  getSuggestions(query: string): TFile[] {
+    const lowerQuery = query.toLowerCase();
+    return this.allFiles.filter(f => f.basename.toLowerCase().includes(lowerQuery));
+  }
+
+  renderSuggestion(file: TFile, el: HTMLElement): void {
+    el.createEl('div', { text: file.basename });
+    el.createEl('small', { text: file.path, cls: 'storyflow-subtext' });
+  }
+
+  async onChooseSuggestion(targetFile: TFile): Promise<void> {
+    // Ask if it's before or after
+    new DependencyTypeModal(this.plugin, this.file, targetFile.basename, () => {
+      // Re-open self to allow adding more dependencies
+      new SetDependenciesModal(this.plugin, this.file, this.onComplete).open();
+    }).open();
+  }
+
+  onClose() {
+    super.onClose();
+    // Use setTimeout so if we are just switching to DependencyTypeModal, we don't fire Complete early
+    setTimeout(() => {
+        if (!document.querySelector('.modal-container')) {
+            this.onComplete();
+        }
+    }, 100);
+  }
+}
+
+class DependencyTypeModal extends Modal {
+  private file: TFile;
+  private targetBasename: string;
+  private onComplete: () => void;
+
+  constructor(plugin: StoryboardCanvasPlugin, file: TFile, targetBasename: string, onComplete: () => void) {
+    super(plugin.app);
+    this.file = file;
+    this.targetBasename = targetBasename;
+    this.onComplete = onComplete;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h3', { text: `Dependency: ${this.targetBasename}` });
+    contentEl.createEl('p', { text: `Does "${this.targetBasename}" happen BEFORE or AFTER "${this.file.basename}"?` });
+
+    const btnContainer = contentEl.createDiv({ cls: 'storyflow-flex-row' });
+    
+    const beforeBtn = btnContainer.createEl('button', { text: 'Happens BEFORE' });
+    beforeBtn.onclick = async () => {
+      await this.saveDependency('before');
+      this.close();
+    };
+
+    const afterBtn = btnContainer.createEl('button', { text: 'Happens AFTER' });
+    afterBtn.onclick = async () => {
+      await this.saveDependency('after');
+      this.close();
+    };
+  }
+
+  private async saveDependency(type: 'before' | 'after') {
+    const depStr = `${this.targetBasename}:${type}`;
+    await this.app.fileManager.processFrontMatter(this.file, (fm) => {
+      if (!fm['story-deps']) fm['story-deps'] = [];
+      if (!Array.isArray(fm['story-deps'])) fm['story-deps'] = [fm['story-deps']];
+      if (!fm['story-deps'].includes(depStr)) {
+        fm['story-deps'].push(depStr);
+      }
+    });
+
+    // Two-way data binding
+    const inverseType = type === 'before' ? 'after' : 'before';
+    const inverseDepStr = `${this.file.basename}:${inverseType}`;
+    
+    const targetFile = this.app.vault.getMarkdownFiles().find(f => f.basename === this.targetBasename);
+    if (targetFile) {
+      await this.app.fileManager.processFrontMatter(targetFile, (fm) => {
+        if (!fm['story-deps']) fm['story-deps'] = [];
+        if (!Array.isArray(fm['story-deps'])) fm['story-deps'] = [fm['story-deps']];
+        if (!fm['story-deps'].includes(inverseDepStr)) {
+          fm['story-deps'].push(inverseDepStr);
+        }
+      });
+      new Notice(`Linked: ${this.file.basename} & ${this.targetBasename}`);
+    } else {
+      new Notice(`Added one-way dependency: ${depStr}`);
+    }
+  }
+
+  onClose() {
+    this.contentEl.empty();
+    this.onComplete();
+  }
+}
+
 // ─── Combined Tag Scene Modal ────────────────────────────────
 
 /**
- * Two-step tagging: date first, then arc.
+ * Three-step tagging: date, arc, then optional dependencies.
  */
 export function tagScene(plugin: StoryboardCanvasPlugin, file: TFile): void {
   new SetDateModal(plugin, file, () => {
-    new SetArcModal(plugin, file).open();
+    new SetArcModal(plugin, file, () => {
+        new SetDependenciesModal(plugin, file).open();
+    }).open();
   }).open();
 }

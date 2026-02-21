@@ -3,7 +3,7 @@ import type StoryboardCanvasPlugin from '../../main';
 import { CanvasNode } from '../Canvas';
 import { getAbstractDateFromMetadata } from '../dateParser';
 import { formatAbstractDate } from '../dateFormatter';
-import { setFrontmatterKey, collectFrontmatterValues } from '../taggingModals';
+import { setFrontmatterKey, collectFrontmatterValues, SetDependenciesModal } from '../taggingModals';
 
 export const INSPECTOR_VIEW_TYPE = 'storyboard-inspector-view';
 
@@ -11,6 +11,7 @@ export class StoryboardInspectorView extends ItemView {
   plugin: StoryboardCanvasPlugin;
   pollInterval: number | null = null;
   activeNodeId: string | null = null;
+  showConstraintWindow: boolean = false;
 
   container: HTMLDivElement;
   contentDiv: HTMLDivElement;
@@ -61,6 +62,8 @@ export class StoryboardInspectorView extends ItemView {
       cls: 'empty-state' 
     });
     this.activeNodeId = null;
+    this.showConstraintWindow = false;
+    this.clearConstraintOverlays();
   }
 
   pollSelection() {
@@ -97,6 +100,7 @@ export class StoryboardInspectorView extends ItemView {
 
   async renderInspector(node: CanvasNode) {
     this.container.empty();
+    this.clearConstraintOverlays();
     if (!node.file) return;
 
     this.container.createEl('h4', { text: node.file.basename });
@@ -111,6 +115,19 @@ export class StoryboardInspectorView extends ItemView {
     const abstractDate = getAbstractDateFromMetadata(cache!, 'story-date', this.plugin.settings.dateSettings);
     if (abstractDate) {
       currentDateRaw = formatAbstractDate(abstractDate, this.plugin.settings.dateSettings);
+    }
+
+    const rawDeps = fm['story-deps'] as string[] | undefined;
+    const currentDeps: { basename: string, type: 'before' | 'after' }[] = [];
+    if (Array.isArray(rawDeps)) {
+      for (const dep of rawDeps) {
+        if (typeof dep === 'string') {
+          const parts = dep.split(':');
+          if (parts.length === 2 && (parts[1] === 'before' || parts[1] === 'after')) {
+            currentDeps.push({ basename: parts[0], type: parts[1] as 'before' | 'after' });
+          }
+        }
+      }
     }
 
     // ─── Phase 5: Calculate Bounding Dates ───
@@ -144,6 +161,61 @@ export class StoryboardInspectorView extends ItemView {
         }
       }
     } catch(e) { /* ignore extraction errors safely */ }
+
+    // ─── Phase 6: Calculate Constraint Window ───
+    let constraintEarliestX = -Infinity;
+    let constraintLatestX = Infinity;
+    let constraintStr = 'No constraints via dependencies.';
+
+    if (currentDeps.length > 0 && canvas) {
+        try {
+            const scenes = await this.plugin.canvasManager.extractScenes(canvas);
+            
+            let maxBeforeDate: number[] | null = null;
+            let minAfterDate: number[] | null = null;
+            let maxBeforeScene: any = null;
+            let minAfterScene: any = null;
+
+            for (const dep of currentDeps) {
+                const targetScene = scenes.find(s => s.file.basename === dep.basename);
+                if (!targetScene) continue;
+
+                if (dep.type === 'before') {
+                    // This node must be BEFORE the target
+                    // So the target is the LATEST possible boundary
+                    if (!minAfterDate || this.compareAbstractDates(targetScene.date, minAfterDate) < 0) {
+                        minAfterDate = targetScene.date;
+                        minAfterScene = targetScene;
+                    }
+                } else if (dep.type === 'after') {
+                    // This node must be AFTER the target
+                    // So the target is the EARLIEST possible boundary
+                    if (!maxBeforeDate || this.compareAbstractDates(targetScene.date, maxBeforeDate) > 0) {
+                        maxBeforeDate = targetScene.date;
+                        maxBeforeScene = targetScene;
+                    }
+                }
+            }
+
+            const eStr = maxBeforeScene ? formatAbstractDate(maxBeforeDate!, this.plugin.settings.dateSettings) : '-∞';
+            const lStr = minAfterScene ? formatAbstractDate(minAfterDate!, this.plugin.settings.dateSettings) : '+∞';
+            
+            if (maxBeforeScene || minAfterScene) {
+                constraintStr = `Calculated window:\n${eStr}  ➔  ${lStr}`;
+            }
+
+            // Calculate pixel coords for the canvas overlays
+            if (maxBeforeScene) {
+                const targetCanvasNode = Array.from(canvas.nodes.values()).find(n => n.getData().id === maxBeforeScene!.nodeId);
+                if (targetCanvasNode) constraintEarliestX = targetCanvasNode.x;
+            }
+            if (minAfterScene) {
+                const targetCanvasNode = Array.from(canvas.nodes.values()).find(n => n.getData().id === minAfterScene!.nodeId);
+                if (targetCanvasNode) constraintLatestX = targetCanvasNode.x;
+            }
+
+        } catch(e) { /* fallback */ }
+    }
 
     // --- Arc Editor ---
     const arcSetting = new Setting(this.container)
@@ -238,6 +310,83 @@ export class StoryboardInspectorView extends ItemView {
         });
       });
 
+    // --- Dependencies List ---
+    this.container.createEl('h4', { text: 'Dependencies' });
+    const depsContainer = this.container.createDiv({ cls: 'storyboard-deps-list' });
+    if (currentDeps.length === 0) {
+        depsContainer.createEl('span', { text: 'No dependencies set.', cls: 'storyflow-subtext' });
+    } else {
+        currentDeps.forEach(dep => {
+            const depItem = depsContainer.createDiv({ cls: 'storyflow-dep-item' });
+            depItem.createEl('div', { 
+                text: `${dep.type === 'before' ? 'Before:' : 'After:'} ${dep.basename}`,
+                cls: `storyflow-dep-tag dep-${dep.type}`
+            });
+            const removeBtn = depItem.createEl('button', { text: '✕', cls: 'storyflow-dep-remove' });
+            
+            removeBtn.onclick = async () => {
+                const depStr = `${dep.basename}:${dep.type}`;
+                const inverseType = dep.type === 'before' ? 'after' : 'before';
+                const inverseDepStr = `${node.file!.basename}:${inverseType}`;
+
+                // 1. Remove from THIS file
+                await this.app.fileManager.processFrontMatter(node.file!, (fm) => {
+                    const arr = fm['story-deps'];
+                    if (Array.isArray(arr)) {
+                        fm['story-deps'] = arr.filter(d => d !== depStr);
+                        if (fm['story-deps'].length === 0) delete fm['story-deps'];
+                    }
+                });
+
+                // 2. Remove from TARGET file (Two-way data binding)
+                const targetFile = this.app.vault.getMarkdownFiles().find(f => f.basename === dep.basename);
+                if (targetFile) {
+                    await this.app.fileManager.processFrontMatter(targetFile, (fm) => {
+                        const arr = fm['story-deps'];
+                        if (Array.isArray(arr)) {
+                            fm['story-deps'] = arr.filter(d => d !== inverseDepStr);
+                            if (fm['story-deps'].length === 0) delete fm['story-deps'];
+                        }
+                    });
+                }
+
+                new Notice(`Removed dependency: ${dep.basename}`);
+                setTimeout(() => this.pollSelection(), 50); // Refresh immediately
+            };
+        });
+    }
+
+    new Setting(this.container)
+      .addButton(btn => btn
+        .setButtonText('+ Add Dependency')
+        .onClick(() => {
+            new SetDependenciesModal(this.plugin, node.file!, () => {
+                this.pollSelection(); // Refresh Inspector when modal closes
+            }).open();
+        })
+      );
+
+    // --- Constraint Window Toggle ---
+    new Setting(this.container)
+      .setName('Show constraint window')
+      .setDesc(constraintStr)
+      .addToggle(toggle => {
+          toggle.setValue(this.showConstraintWindow)
+                .onChange(val => {
+                    this.showConstraintWindow = val;
+                    if (val) {
+                        this.renderConstraintOverlays(canvas, constraintEarliestX, constraintLatestX);
+                    } else {
+                        this.clearConstraintOverlays();
+                    }
+                });
+      });
+      
+    // Re-apply safely on reload if toggle left on
+    if (this.showConstraintWindow && canvas) {
+        this.renderConstraintOverlays(canvas, constraintEarliestX, constraintLatestX);
+    }
+
     // --- Date Slider (X-Axis Control) ---
     this.container.createEl('h4', { text: 'Timeline Nudge', cls: 'timeline-slider-header' });
     this.container.createEl('p', { 
@@ -276,5 +425,65 @@ export class StoryboardInspectorView extends ItemView {
       // Calculate new date based on new position relative to others
       if(canvas) await this.plugin.canvasManager.syncStoryboard(canvas);
     });
+  }
+
+  // ─── Phase 6 Helpers ───
+
+  private compareAbstractDates(a: number[], b: number[]): number {
+    const len = Math.max(a.length, b.length);
+    for (let i = 0; i < len; i++) {
+        const aVal = a[i] || 0;
+        const bVal = b[i] || 0;
+        if (aVal !== bVal) return aVal - bVal;
+    }
+    return 0;
+  }
+
+  private clearConstraintOverlays() {
+      document.querySelectorAll('.storyflow-constraint-overlay').forEach(el => el.remove());
+  }
+
+  private renderConstraintOverlays(canvas: any, earliestX: number, latestX: number) {
+      if (!canvas) return;
+      this.clearConstraintOverlays();
+
+      const viewport = canvas.nodeEl; // The container holding all nodes (.canvas-wrapper or similar)
+      if (!viewport) return;
+
+      // Unbounded on left side
+      if (earliestX !== -Infinity) {
+          const earliestOverlay = document.createElement('div');
+          earliestOverlay.addClasses(['storyflow-constraint-overlay', 'invalid']);
+          // Spans from extreme negative to the earliest allowable coordinate
+          Object.assign(earliestOverlay.style, {
+              left: '-100000px',
+              width: `${100000 + earliestX}px`,
+          });
+          viewport.appendChild(earliestOverlay);
+      }
+
+      // Unbounded on right side
+      if (latestX !== Infinity) {
+          const latestOverlay = document.createElement('div');
+          latestOverlay.addClasses(['storyflow-constraint-overlay', 'invalid']);
+          // Spans from latest allowable coordinate to extreme positive
+          Object.assign(latestOverlay.style, {
+              left: `${latestX}px`,
+              width: '100000px',
+          });
+          viewport.appendChild(latestOverlay);
+      }
+
+      // Safe zone (Green)
+      const safeLeft = earliestX === -Infinity ? -100000 : earliestX;
+      const safeRight = latestX === Infinity ? 100000 : latestX;
+      
+      const validOverlay = document.createElement('div');
+      validOverlay.addClasses(['storyflow-constraint-overlay', 'valid']);
+      Object.assign(validOverlay.style, {
+          left: `${safeLeft}px`,
+          width: `${safeRight - safeLeft}px`,
+      });
+      viewport.appendChild(validOverlay);
   }
 }

@@ -28,3 +28,80 @@
   border-top: none;
   padding: 12px 0;
 }
+
+/* Phase 6: Constraint Window Overlays */
+.storyflow-constraint-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.storyflow-constraint-overlay.invalid {
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+.storyflow-constraint-overlay.valid {
+  background-color: rgba(0, 255, 0, 0.05);
+}
+
+/* Dependencies List UI */
+.storyboard-deps-list {
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.storyflow-dep-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--background-secondary-alt);
+  border-radius: 4px;
+}
+
+.storyflow-dep-tag {
+  font-size: 0.85em;
+  padding: 4px 8px;
+  color: var(--text-normal);
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.storyflow-dep-remove {
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 8px;
+  margin-right: 4px;
+  border-radius: 4px;
+  height: 24px;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.storyflow-dep-remove:hover {
+  background-color: var(--background-modifier-error-hover);
+  color: var(--text-error);
+}
+
+.storyflow-dep-tag.dep-before {
+  border-left: 3px solid var(--color-red);
+}
+
+.storyflow-dep-tag.dep-after {
+  border-left: 3px solid var(--color-green);
+}
+
+.storyflow-flex-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}

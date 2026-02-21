@@ -96,8 +96,22 @@ export class StoryboardCanvasManager {
       const arc = getArcFromMetadata(metadata);
       const title = getTitleFromMetadata(metadata) || file.basename;
 
+      // Extract dependencies
+      const rawDeps = metadata.frontmatter?.['story-deps'] as string[] | undefined;
+      const deps: { basename: string, type: 'before' | 'after' }[] = [];
+      if (Array.isArray(rawDeps)) {
+        for (const dep of rawDeps) {
+          if (typeof dep === 'string') {
+            const parts = dep.split(':');
+            if (parts.length === 2 && (parts[1] === 'before' || parts[1] === 'after')) {
+              deps.push({ basename: parts[0], type: parts[1] as 'before' | 'after' });
+            }
+          }
+        }
+      }
+
       console.log(`[Storyboard] ✓ ${file.basename}: date=[${date}], arc="${arc}"`);
-      events.push({ nodeId: id, file, date, endDate, arc, title });
+      events.push({ nodeId: id, file, date, endDate, arc, title, deps });
     }
 
     return events;

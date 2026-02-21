@@ -70,6 +70,7 @@ export interface StoryEvent {
   title: string;
   body?: string;
   imageUrl?: string;
+  deps?: { basename: string, type: 'before' | 'after' }[];
 }
 
 // ─── Arc Configuration ───────────────────────────────────────
