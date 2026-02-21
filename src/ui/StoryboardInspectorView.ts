@@ -9,6 +9,7 @@ export const INSPECTOR_VIEW_TYPE = 'storyboard-inspector-view';
 
 export class StoryboardInspectorView extends ItemView {
   plugin: StoryboardCanvasPlugin;
+  pollInterval: number | null = null;
   activeNodeId: string | null = null;
 
   container: HTMLDivElement;
@@ -40,9 +41,16 @@ export class StoryboardInspectorView extends ItemView {
     this.container = containerEl.createDiv({ cls: 'inspector-content' });
 
     this.renderEmptyState();
+
+    // Poll selection every 300ms since Canvas API doesn't expose native selection events
+    this.pollInterval = window.setInterval(() => this.pollSelection(), 300);
   }
 
   async onClose() {
+    if (this.pollInterval !== null) {
+      window.clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
     this.container.empty();
   }
 

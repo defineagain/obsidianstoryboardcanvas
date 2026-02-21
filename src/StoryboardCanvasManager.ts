@@ -40,10 +40,14 @@ export class StoryboardCanvasManager {
   // ─── Canvas Access ───────────────────────────────────────
 
   getActiveCanvas(): Canvas | null {
-    const leaf = this.app.workspace.getMostRecentLeaf();
-    if (!leaf) return null;
-    const view = leaf.view as any;
-    if (view?.getViewType?.() !== 'canvas') return null;
+    // Find all canvas leaves
+    const leaves = this.app.workspace.getLeavesOfType('canvas');
+    if (leaves.length === 0) return null;
+
+    // Default to the first open canvas we can find
+    // (If the user has multiple canvases open, they might need to click the canvas first to make it recent, 
+    // but typically there is only one canvas active at a time)
+    const view = leaves[0].view as any;
     return view.canvas as Canvas ?? null;
   }
 
