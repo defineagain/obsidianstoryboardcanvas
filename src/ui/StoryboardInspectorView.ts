@@ -113,10 +113,22 @@ export class StoryboardInspectorView extends ItemView {
       .setDesc('Which lane or plotline this scene belongs to.')
       .addText(text => {
         text.setValue(currentArc)
-            .setPlaceholder('e.g. Main Plot')
-            .onChange(async (val) => {
-              await setFrontmatterKey(this.app, node.file!, 'story-arc', val);
-            });
+            .setPlaceholder('e.g. Main Plot');
+
+        const saveArc = async () => {
+          const val = text.getValue();
+          if (val !== currentArc) {
+            await setFrontmatterKey(this.app, node.file!, 'story-arc', val);
+          }
+        };
+
+        text.inputEl.addEventListener('blur', saveArc);
+        text.inputEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            saveArc();
+            text.inputEl.blur(); // remove focus visually confirming save
+          }
+        });
       });
 
     // --- Date String Editor ---
@@ -125,13 +137,27 @@ export class StoryboardInspectorView extends ItemView {
       .setDesc('Format must match plugin settings regex.')
       .addText(text => {
         text.setValue(currentDateRaw)
-            .setPlaceholder('YYYY-MM-DD')
-            .onChange(async (val) => {
-              const regex = this.plugin.settings.dateSettings.dateParserRegex;
-              if (new RegExp(regex).test(val)) {
-                await setFrontmatterKey(this.app, node.file!, 'story-date', val);
-              }
-            });
+            .setPlaceholder('YYYY-MM-DD');
+
+        const saveDate = async () => {
+          const val = text.getValue();
+          if (val !== currentDateRaw) {
+            const regex = this.plugin.settings.dateSettings.dateParserRegex;
+            if (new RegExp(regex).test(val)) {
+              await setFrontmatterKey(this.app, node.file!, 'story-date', val);
+            } else {
+              new Notice('Invalid date format for Storyboard');
+            }
+          }
+        };
+
+        text.inputEl.addEventListener('blur', saveDate);
+        text.inputEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            saveDate();
+            text.inputEl.blur();
+          }
+        });
       });
 
     // --- Date Slider (X-Axis Control) ---
