@@ -313,10 +313,12 @@ export class StoryboardCanvasManager {
 
     const canvasData = canvas.getData();
 
-    // 1. Clean old marker nodes (text labels for dates & arcs)
-    canvasData.nodes = canvasData.nodes.filter((n: any) => !n.id?.startsWith(this.MARKER_PREFIX));
+    // 1. Clean old marker nodes (text labels for dates & arcs, groups)
+    // Wholesale nuke everything that isn't a file to prevent ghosting
+    canvasData.nodes = canvasData.nodes.filter((n: any) => n.type === 'file');
     // 2. Clean old marker edges (generated chrono and links)
-    canvasData.edges = canvasData.edges.filter((e: any) => !e.id?.startsWith(this.MARKER_PREFIX));
+    // Destroy all edges. They will be entirely rebuilt from the ground up.
+    canvasData.edges = [];
 
     // 3. Mutate payload simultaneously to bypass async React Node DOM recreation
     this.applySortToData(canvasData, scenes);
