@@ -1,7 +1,7 @@
 {
   "id": "obsidian-storyboard-canvas",
   "name": "Storyboard Canvas",
-  "version": "0.7.6.1",
+  "version": "0.7.6.2",
   "minAppVersion": "1.5.0",
   "description": "Canvas-based storyboarding: arrange linked documents on a timeline (X=date, Y=plot arc) with cross-links.",
   "author": "defineagain",

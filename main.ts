@@ -5,7 +5,7 @@
 // Arranges linked documents on Canvas: X=time, Y=arc,
 // with cross-link edges from [[wikilinks]].
 
-import { Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { Plugin, TFile, WorkspaceLeaf, Editor, MarkdownView } from 'obsidian';
 import { StoryboardCanvasManager } from './src/StoryboardCanvasManager';
 import { SetDateModal, SetArcModal, tagScene } from './src/taggingModals';
 import { DEFAULT_SETTINGS, StoryboardSettingTab, type StoryboardSettings } from './src/settings';
@@ -40,33 +40,30 @@ export default class StoryboardCanvasPlugin extends Plugin {
     this.addCommand({
       id: 'storyboard-set-date',
       name: 'Set story date on current note',
-      checkCallback: (checking: boolean) => {
-        const file = this.app.workspace.getActiveFile();
-        if (!file || file.extension !== 'md') return false;
-        if (!checking) new SetDateModal(this, file).open();
-        return true;
+      editorCallback: (editor: Editor, view: MarkdownView) => {
+        if (view.file) {
+          new SetDateModal(this, view.file).open();
+        }
       },
     });
 
     this.addCommand({
       id: 'storyboard-set-arc',
       name: 'Set story arc on current note',
-      checkCallback: (checking: boolean) => {
-        const file = this.app.workspace.getActiveFile();
-        if (!file || file.extension !== 'md') return false;
-        if (!checking) new SetArcModal(this, file).open();
-        return true;
+      editorCallback: (editor: Editor, view: MarkdownView) => {
+        if (view.file) {
+          new SetArcModal(this, view.file).open();
+        }
       },
     });
 
     this.addCommand({
       id: 'storyboard-tag-scene',
       name: 'Tag scene (set date + arc)',
-      checkCallback: (checking: boolean) => {
-        const file = this.app.workspace.getActiveFile();
-        if (!file || file.extension !== 'md') return false;
-        if (!checking) tagScene(this, file);
-        return true;
+      editorCallback: (editor: Editor, view: MarkdownView) => {
+        if (view.file) {
+          tagScene(this, view.file);
+        }
       },
     });
 
