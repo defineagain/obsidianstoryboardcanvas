@@ -15,7 +15,7 @@ export async function setFrontmatterKey(
   app: App,
   file: TFile,
   key: string,
-  value: string,
+  value: any,
 ): Promise<void> {
   await app.fileManager.processFrontMatter(file, (fm) => {
     fm[key] = value;
@@ -283,15 +283,81 @@ class DependencyTypeModal extends Modal {
   }
 }
 
+// ─── Set Tension Modal ───────────────────────────────────────
+
+export class SetTensionModal extends Modal {
+  private file: TFile;
+  private onComplete: () => void;
+  private value: number = 5;
+  private plugin: StoryboardCanvasPlugin;
+
+  constructor(plugin: StoryboardCanvasPlugin, file: TFile, onComplete: () => void = () => {}) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.file = file;
+    this.onComplete = onComplete;
+
+    const cache = plugin.app.metadataCache.getFileCache(file);
+    const existing = cache?.frontmatter?.['tension'];
+    if (typeof existing === 'number' && existing >= 1 && existing <= 10) {
+      this.value = existing;
+    }
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h3', { text: `Set tension: ${this.file.basename}` });
+
+    const tensionDisplay = contentEl.createEl('div', { text: `Level: ${this.value}` });
+    tensionDisplay.style.textAlign = 'center';
+    tensionDisplay.style.fontSize = '1.2em';
+    tensionDisplay.style.fontWeight = 'bold';
+    tensionDisplay.style.marginBottom = '12px';
+
+    new Setting(contentEl)
+      .setName('Pacing / Dramatic Tension')
+      .setDesc('1 (Calm) to 10 (High Action)')
+      .addSlider(slider => {
+        slider.setLimits(1, 10, 1)
+          .setValue(this.value)
+          .setDynamicTooltip()
+          .onChange(v => {
+            this.value = v;
+            tensionDisplay.setText(`Level: ${v}`);
+          });
+      });
+
+    new Setting(contentEl)
+      .addButton(btn => btn
+        .setButtonText('Save')
+        .setCta()
+        .onClick(() => this.save()));
+  }
+
+  private async save(): Promise<void> {
+    await setFrontmatterKey(this.app, this.file, 'tension', this.value);
+    new Notice(`Set tension: ${this.value}`);
+    this.close();
+    this.onComplete();
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
 // ─── Combined Tag Scene Modal ────────────────────────────────
 
 /**
- * Three-step tagging: date, arc, then optional dependencies.
+ * Four-step tagging: date, arc, tension, then optional dependencies.
  */
 export function tagScene(plugin: StoryboardCanvasPlugin, file: TFile): void {
   new SetDateModal(plugin, file, () => {
     new SetArcModal(plugin, file, () => {
+      new SetTensionModal(plugin, file, () => {
         new SetDependenciesModal(plugin, file).open();
+      }).open();
     }).open();
   }).open();
 }

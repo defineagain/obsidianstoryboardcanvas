@@ -23,11 +23,28 @@ export function registerCanvasHooks(plugin: StoryboardCanvasPlugin) {
     const canvasProto = Object.getPrototypeOf(canvasView.canvas);
     if (!canvasProto) return;
 
-    // ─── 0. Hook into Ghost Node Spawning (Shift + DblClick) ───
+    // ─── 0. Hook into Ghost Node Spawning (Shift + DblClick & Shift + RightClick) ───
     if (canvasProto.onDoubleClick) {
         plugin.register(
             around(canvasProto, {
                 onDoubleClick: (next: Function) => function(this: any, e: MouseEvent) {
+                    if (e.shiftKey) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const pos = this.posFromEvt(e);
+                        handleGhostNodeSpawn(plugin, this, pos);
+                        return; // intercept
+                    }
+                    return next.call(this, e);
+                }
+            })
+        );
+    }
+    
+    if (canvasProto.onContextMenu) {
+        plugin.register(
+            around(canvasProto, {
+                onContextMenu: (next: Function) => function(this: any, e: MouseEvent) {
                     if (e.shiftKey) {
                         e.stopPropagation();
                         e.preventDefault();
@@ -86,6 +103,27 @@ export function registerCanvasHooks(plugin: StoryboardCanvasPlugin) {
                 }
             })
         );
+    }
+
+    // ─── 2. Global DOM Fallback for Shift+RightClick ───
+    // If canvasProto.onContextMenu doesn't exist, we attach a passive listener to the window
+    if (!canvasProto.onContextMenu && !(plugin as any)['__globalContextMenuBound']) {
+        (plugin as any)['__globalContextMenuBound'] = true;
+        plugin.registerDomEvent(window, 'contextmenu', (e: MouseEvent) => {
+            if (e.shiftKey) {
+                // Find active canvas
+                const canvasView = plugin.app.workspace.getLeavesOfType('canvas')?.[0]?.view as any;
+                if (canvasView && canvasView.canvas && canvasView.canvas.canvasEl.contains(e.target as Node)) {
+                    // Only intercept if they clicked the background, not a specific node
+                    if ((e.target as HTMLElement).hasClass('canvas-wrapper')) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const pos = canvasView.canvas.posFromEvt(e);
+                        handleGhostNodeSpawn(plugin, canvasView.canvas, pos);
+                    }
+                }
+            }
+        }, { capture: true });
     }
   };
 

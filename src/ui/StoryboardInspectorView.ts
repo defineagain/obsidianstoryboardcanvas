@@ -133,6 +133,10 @@ export class StoryboardInspectorView extends ItemView {
 
     const currentArc = fm['story-arc']?.toString() || '';
     let currentDateRaw = fm['story-date']?.toString() || '';
+    let currentTension = 5; // Default if not found
+    if (typeof fm['tension'] === 'number' && fm['tension'] >= 1 && fm['tension'] <= 10) {
+      currentTension = fm['tension'];
+    }
     
     // Parse to nicely formatted string if possible
     const abstractDate = getAbstractDateFromMetadata(cache!, 'story-date', this.plugin.settings.dateSettings);
@@ -352,6 +356,32 @@ export class StoryboardInspectorView extends ItemView {
             text.inputEl.blur();
           }
         });
+      });
+
+    // --- Tension Editor ---
+    const tensionContainer = propsCard.createDiv();
+    const tensionDisplay = tensionContainer.createEl('div', { text: `Tension Level: ${currentTension}` });
+    tensionDisplay.style.fontWeight = 'bold';
+    tensionDisplay.style.marginBottom = '4px';
+
+    new Setting(tensionContainer)
+      .setName('Dramatic Tension')
+      .setDesc('1 (Calm) to 10 (High Action)')
+      .addSlider(slider => {
+        slider.setLimits(1, 10, 1)
+          .setValue(currentTension)
+          .setDynamicTooltip()
+          .onChange(async (v) => {
+            currentTension = v;
+            tensionDisplay.setText(`Tension Level: ${v}`);
+            
+            // Note: Canvas selection polling could interfere if we fire this instantly on every tiny drag.
+            // But since this is a slider that we release to finalize, we can update frontmatter immediately.
+            await setFrontmatterKey(this.app, node.file!, 'tension', v);
+            
+            // Re-render the node explicitly so it glow updates on the canvas right away.
+            if(canvas) this.plugin.canvasManager.sortStoryboard(canvas); // Hack to trigger CSS update
+          });
       });
 
     // --- Dependencies Card ---

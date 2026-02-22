@@ -7,7 +7,7 @@
 
 import { Plugin, TFile, WorkspaceLeaf, Editor, MarkdownView } from 'obsidian';
 import { StoryboardCanvasManager } from './src/StoryboardCanvasManager';
-import { SetDateModal, SetArcModal, tagScene } from './src/taggingModals';
+import { SetDateModal, SetArcModal, SetTensionModal, tagScene } from './src/taggingModals';
 import { DEFAULT_SETTINGS, StoryboardSettingTab, type StoryboardSettings } from './src/settings';
 import { StoryboardInspectorView, INSPECTOR_VIEW_TYPE } from './src/ui/StoryboardInspectorView';
 import { registerCanvasHooks } from './src/canvasHooks';
@@ -53,6 +53,16 @@ export default class StoryboardCanvasPlugin extends Plugin {
       editorCallback: (editor: Editor, view: MarkdownView) => {
         if (view.file) {
           new SetArcModal(this, view.file).open();
+        }
+      },
+    });
+
+    this.addCommand({
+      id: 'storyboard-set-tension',
+      name: 'Set story tension (1-10) on current note',
+      editorCallback: (editor: Editor, view: MarkdownView) => {
+        if (view.file) {
+          new SetTensionModal(this, view.file).open();
         }
       },
     });

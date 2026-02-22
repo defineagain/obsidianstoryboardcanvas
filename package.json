@@ -1,7 +1,7 @@
 {
   "name": "obsidian-storyboard-canvas",
-  "version": "0.8.0",
-  "description": "Canvas-based storyboarding with timeline layout for Obsidian",
+  "version": "0.8.2",
+  "description": "Visual pipeline and storyboard arrangement tool for Draw Things",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
