@@ -2,8 +2,9 @@
 // STORYBOARD CANVAS — Plugin Entry Point
 // ═══════════════════════════════════════
 // Standalone Obsidian plugin for BRAT distribution.
-// Arranges linked documents on Canvas: X=time, Y=arc,
+// arranges linked documents on Canvas: X=time, Y=arc,
 // with cross-link edges from [[wikilinks]].
+// Version 0.8.8 Cache Buster
 
 import { Plugin, TFile, WorkspaceLeaf, Editor, MarkdownView } from 'obsidian';
 import { StoryboardCanvasManager } from './src/StoryboardCanvasManager';
