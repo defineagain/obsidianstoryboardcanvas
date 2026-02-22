@@ -4,6 +4,8 @@ import type StoryboardCanvasPlugin from '../main';
 import { injectCanvasMenuButton } from './ui/canvasMenuExtension';
 import { INSPECTOR_VIEW_TYPE, StoryboardInspectorView } from './ui/StoryboardInspectorView';
 
+import { handleGhostNodeSpawn } from './ghostNodeBuilder';
+
 /**
  * Patches the internal Obsidian Canvas prototype to hook into its component lifecycle.
  * This is vastly superior to DOM MutationObservers or `setInterval` polling.
@@ -20,6 +22,24 @@ export function registerCanvasHooks(plugin: StoryboardCanvasPlugin) {
 
     const canvasProto = Object.getPrototypeOf(canvasView.canvas);
     if (!canvasProto) return;
+
+    // ─── 0. Hook into Ghost Node Spawning (Shift + DblClick) ───
+    if (canvasProto.onDoubleClick) {
+        plugin.register(
+            around(canvasProto, {
+                onDoubleClick: (next: Function) => function(this: any, e: MouseEvent) {
+                    if (e.shiftKey) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const pos = this.posFromEvt(e);
+                        handleGhostNodeSpawn(plugin, this, pos);
+                        return; // intercept
+                    }
+                    return next.call(this, e);
+                }
+            })
+        );
+    }
 
     // ─── 1. Hook into Node Selection changes (replaces 300ms Inspector poller) ───
     if (canvasProto.requestSave) {

@@ -5,7 +5,7 @@
 
 import type { AbstractDate, LayoutConfig, StoryEvent } from './canvasTypes';
 import { DEFAULT_LAYOUT_CONFIG } from './canvasTypes';
-import type { Position } from './Canvas';
+import type { Position, Canvas } from './Canvas';
 
 // ─── Date Comparison ─────────────────────────────────────────
 
@@ -128,4 +128,116 @@ export function calculateLayout(
   }
 
   return result;
+}
+
+// ─── Inverse Layout (Coordinate → Data) ──────────────────────
+
+/**
+ * Derives the active Story Arc name based on a raw Y coordinate.
+ * It reconstructs the active arc lanes by scanning existing nodes.
+ */
+export function getArcFromY(
+  y: number, 
+  events: StoryEvent[], 
+  canvas: Canvas,
+  config: LayoutConfig = DEFAULT_LAYOUT_CONFIG
+): string {
+  if (events.length === 0) return 'Main Plot'; // Fallback if canvas is empty
+  
+  // Reconstruct arc order by sorting nodes by their physical Y position
+  const uniqueArcs = new Map<string, number>(); // arcName -> average Y
+  
+  for (const event of events) {
+      if (!uniqueArcs.has(event.arc)) {
+          // Find all events in this arc to average their Y (in case of slight misalignment)
+          const arcEvents = events.filter(e => e.arc === event.arc);
+          const yVals = arcEvents.map(e => canvas.nodes.get(e.nodeId)?.y ?? 0);
+          const avgY = yVals.length > 0 ? (yVals.reduce((a, b) => a + b, 0) / yVals.length) : 0;
+          uniqueArcs.set(event.arc, avgY);
+      }
+  }
+
+  // Sort arcs by their average Y position from top to bottom
+  const sortedArcs = Array.from(uniqueArcs.entries()).sort((a, b) => a[1] - b[1]);
+  
+  // Calculate which row index the clicked Y coordinate falls into
+  // + (config.arcSpacing / 2) to snap to the closest lane rather than the floor
+  let targetIndex = Math.floor((y + (config.arcSpacing / 2)) / config.arcSpacing);
+  
+  // Clamp index
+  if (targetIndex < 0) targetIndex = 0;
+  if (targetIndex >= sortedArcs.length) return sortedArcs[sortedArcs.length - 1][0];
+
+  return sortedArcs[targetIndex][0];
+}
+
+/**
+ * Interpolates an AbstractDate from a raw X coordinate.
+ * In absolute mode, reverses the scaling math.
+ * In ordered mode, interpolates between the two closest chronological nodes.
+ */
+export function getDateFromX(
+  x: number,
+  events: StoryEvent[],
+  canvas: Canvas,
+  config: LayoutConfig = DEFAULT_LAYOUT_CONFIG
+): AbstractDate {
+  if (events.length === 0) return [new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()];
+
+  if (config.layoutMode === 'absolute') {
+      const ordinals = events.map(e => dateToOrdinal(e.date));
+      const minOrdinal = Math.min(...ordinals);
+      
+      const targetOrdinal = (x / config.xScale) + minOrdinal;
+      
+      const sortedEvents = [...events].sort((a, b) => compareAbstractDates(a.date, b.date));
+      const beforeEvents = sortedEvents.filter(e => dateToOrdinal(e.date) <= targetOrdinal);
+      const afterEvents = sortedEvents.filter(e => dateToOrdinal(e.date) > targetOrdinal);
+      
+      const before = beforeEvents.length > 0 ? beforeEvents[beforeEvents.length - 1] : null;
+      const after = afterEvents.length > 0 ? afterEvents[0] : null;
+      
+      if (before && after) {
+         const d = [...before.date];
+         if (d.length > 0) d[d.length - 1] = (d[d.length - 1] ?? 0) + 1;
+         return d;
+      }
+      if (before) {
+         const d = [...before.date];
+         if (d.length > 0) d[d.length - 1] = (d[d.length - 1] ?? 0) + 1;
+         return d;
+      }
+      if (after) {
+         const d = [...after.date];
+         if (d.length > 0) d[d.length - 1] = Math.max(1, (d[d.length - 1] ?? 2) - 1);
+         return d;
+      }
+  } else {
+      // Ordered layout: Sort physical nodes by X to find the chronological gap we're clicking into.
+      const physicalNodes = events.map(e => {
+         const nodeX = canvas.nodes.get(e.nodeId)?.x ?? 0;
+         return { ...e, x: nodeX };
+      }).sort((a, b) => a.x - b.x);
+
+      const slotWidth = config.nodeWidth + config.nodeGapX * 2;
+      let targetIndex = Math.floor((x + (slotWidth / 2)) / slotWidth);
+      
+      if (targetIndex <= 0) {
+         const d = [...physicalNodes[0].date];
+         if (d.length > 0) d[d.length - 1] = Math.max(1, (d[d.length - 1] ?? 2) - 1);
+         return d;
+      }
+      if (targetIndex >= physicalNodes.length) {
+         const d = [...physicalNodes[physicalNodes.length - 1].date];
+         if (d.length > 0) d[d.length - 1] = (d[d.length - 1] ?? 0) + 1;
+         return d;
+      }
+      
+      const before = physicalNodes[targetIndex - 1];
+      const d = [...before.date];
+      if (d.length > 0) d[d.length - 1] = (d[d.length - 1] ?? 0) + 1;
+      return d;
+  }
+  
+  return [2000, 1, 1]; // Fallback
 }

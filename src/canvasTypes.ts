@@ -70,6 +70,7 @@ export interface StoryEvent {
   title: string;
   body?: string;
   imageUrl?: string;
+  tension?: number; // 1-10 pacing indicator
   deps?: { basename: string, type: 'before' | 'after' }[];
 }
 

@@ -110,8 +110,15 @@ export class StoryboardCanvasManager {
         }
       }
 
-      console.log(`[Storyboard] ✓ ${file.basename}: date=[${date}], arc="${arc}"`);
-      events.push({ nodeId: id, file, date, endDate, arc, title, deps });
+      // Extract tension heatmap
+      const tensionRaw = metadata.frontmatter?.['tension'];
+      let tension: number | undefined = undefined;
+      if (typeof tensionRaw === 'number' && tensionRaw >= 1 && tensionRaw <= 10) {
+        tension = tensionRaw;
+      }
+
+      console.log(`[Storyboard] ✓ ${file.basename}: date=[${date}], arc="${arc}", tension=${tension}`);
+      events.push({ nodeId: id, file, date, endDate, arc, title, tension, deps });
     }
 
     return events;
@@ -142,6 +149,18 @@ export class StoryboardCanvasManager {
         width: this.layoutConfig.nodeWidth,
         height: this.layoutConfig.nodeHeight,
       });
+
+      // Apply heatmap styling if available
+      const event = scenes.find((s) => s.nodeId === nodeId);
+      if (node.nodeEl) {
+        // Clear old tension classes
+        for (let t = 1; t <= 10; t++) {
+          node.nodeEl.classList.remove(`storyboard-tension-${t}`);
+        }
+        if (event?.tension) {
+          node.nodeEl.classList.add(`storyboard-tension-${Math.floor(event.tension)}`);
+        }
+      }
     }
 
     canvas.requestSave();

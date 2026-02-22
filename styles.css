@@ -142,3 +142,17 @@
   gap: 10px;
   margin-top: 15px;
 }
+
+/* ─── Tension Heatmapping ─── */
+/* Adjusts the border color and adds a subtle glow based on tension (1-10) */
+.canvas-node.storyboard-tension-1 { --canvas-color-border: #3b82f6; box-shadow: 0 0 8px rgba(59, 130, 246, 0.2) !important; }
+.canvas-node.storyboard-tension-2 { --canvas-color-border: #8b5cf6; box-shadow: 0 0 8px rgba(139, 92, 246, 0.2) !important; }
+.canvas-node.storyboard-tension-3 { --canvas-color-border: #a855f7; box-shadow: 0 0 8px rgba(168, 85, 247, 0.2) !important; }
+.canvas-node.storyboard-tension-4 { --canvas-color-border: #d946ef; box-shadow: 0 0 8px rgba(217, 70, 239, 0.3) !important; }
+.canvas-node.storyboard-tension-5 { --canvas-color-border: #ec4899; box-shadow: 0 0 8px rgba(236, 72, 153, 0.3) !important; }
+.canvas-node.storyboard-tension-6 { --canvas-color-border: #f43f5e; box-shadow: 0 0 8px rgba(244, 63, 94, 0.3) !important; }
+.canvas-node.storyboard-tension-7 { --canvas-color-border: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4) !important; }
+.canvas-node.storyboard-tension-8 { --canvas-color-border: #f97316; box-shadow: 0 0 12px rgba(249, 115, 22, 0.5) !important; }
+.canvas-node.storyboard-tension-9 { --canvas-color-border: #f87171; box-shadow: 0 0 14px rgba(248, 113, 113, 0.6) !important; }
+.canvas-node.storyboard-tension-10 { --canvas-color-border: #ff0000; box-shadow: 0 0 18px rgba(255, 0, 0, 0.8) !important; border-width: 2px; }
+
