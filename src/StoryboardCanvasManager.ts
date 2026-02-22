@@ -311,14 +311,19 @@ export class StoryboardCanvasManager {
       return;
     }
 
-    const canvasData = canvas.getData();
+    // 1. Physically destroy all marker nodes directly on the canvas instance
+    for (const [id, node] of canvas.nodes.entries()) {
+      if (node.getData().type !== 'file') {
+        canvas.removeNode(node);
+      }
+    }
 
-    // 1. Clean old marker nodes (text labels for dates & arcs, groups)
-    // Wholesale nuke everything that isn't a file to prevent ghosting
-    canvasData.nodes = canvasData.nodes.filter((n: any) => n.type === 'file');
-    // 2. Clean old marker edges (generated chrono and links)
-    // Destroy all edges. They will be entirely rebuilt from the ground up.
-    canvasData.edges = [];
+    // 2. Physically destroy all edges directly on the canvas instance
+    for (const [id, edge] of canvas.edges.entries()) {
+      canvas.removeEdge(edge);
+    }
+    
+    const canvasData = canvas.getData();
 
     // 3. Mutate payload simultaneously to bypass async React Node DOM recreation
     this.applySortToData(canvasData, scenes);
@@ -442,18 +447,30 @@ export class StoryboardCanvasManager {
       return;
     }
     
-    const { calculateSyncChanges, SyncConfirmationModal } = await import('./syncEngine');
+    const { calculateSyncChanges } = await import('./syncEngine');
+    const { setFrontmatterKey } = await import('./taggingModals');
     const changes = await calculateSyncChanges(this.app, canvas, scenes, this.layoutConfig, this.dateSettings);
     
     if (changes.length === 0) {
-      new Notice('No drag-and-drop changes detected.');
+      new Notice('No drag-and-drop changes detected. Refreshing canvas layout from notes.');
+      this.buildStoryboard(canvas);
       return;
     }
     
-    new SyncConfirmationModal(this.app, changes, this.dateSettings, () => {
-      // Rebuild the sorted storyboard after applying changes
-      this.buildStoryboard(canvas);
-    }).open();
+    let count = 0;
+    for (const change of changes) {
+       if (change.newArc) {
+          await setFrontmatterKey(this.app, change.scene.file, 'story-arc', change.newArc);
+       }
+       if (change.newDate) {
+          const dateStr = formatAbstractDate(change.newDate, this.dateSettings);
+          await setFrontmatterKey(this.app, change.scene.file, 'story-date', dateStr);
+       }
+       count++;
+    }
+    
+    new Notice(`Successfully auto-synced ${count} nodes to their frontmatter.`);
+    this.buildStoryboard(canvas);
   }
 
   // ─── Playback ────────────────────────────────────────────
