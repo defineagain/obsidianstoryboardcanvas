@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Notice, Setting } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, Setting, TFile, Modal, App } from 'obsidian';
 import type StoryboardCanvasPlugin from '../../main';
 import { CanvasNode } from '../Canvas';
 import { getAbstractDateFromMetadata } from '../dateParser';
@@ -357,53 +357,20 @@ export class StoryboardInspectorView extends ItemView {
     // --- Dependencies Card ---
     const depsCard = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
     depsCard.createEl('h4', { text: 'Dependencies' });
-    const depsContainer = depsCard.createDiv({ cls: 'storyboard-deps-list' });
-    if (currentDeps.length === 0) {
-        depsContainer.createEl('span', { text: 'No dependencies set.', cls: 'storyflow-subtext' });
-    } else {
-        currentDeps.forEach(dep => {
-            const tagEl = depsContainer.createEl('span', { cls: `storyflow-dep-tag dep-${dep.type}` });
-            tagEl.setText(`${dep.type === 'before' ? 'Before:' : 'After:'} ${dep.basename}`);
-            
-            const removeBtn = tagEl.createEl('span', { text: '✕', cls: 'storyflow-dep-remove clickable-icon' });
-            
-            removeBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const depStr = `${dep.basename}:${dep.type}`;
-                const inverseType = dep.type === 'before' ? 'after' : 'before';
-                const inverseDepStr = `${node.file!.basename}:${inverseType}`;
-
-                // 1. Remove from THIS file
-                await this.app.fileManager.processFrontMatter(node.file!, (fm) => {
-                    const arr = fm['story-deps'];
-                    if (Array.isArray(arr)) {
-                        fm['story-deps'] = arr.filter(d => d !== depStr);
-                        if (fm['story-deps'].length === 0) delete fm['story-deps'];
-                    }
-                });
-
-                // 2. Remove from TARGET file (Two-way data binding)
-                const targetFile = this.app.vault.getMarkdownFiles().find(f => f.basename === dep.basename);
-                if (targetFile) {
-                    await this.app.fileManager.processFrontMatter(targetFile, (fm) => {
-                        const arr = fm['story-deps'];
-                        if (Array.isArray(arr)) {
-                            fm['story-deps'] = arr.filter(d => d !== inverseDepStr);
-                            if (fm['story-deps'].length === 0) delete fm['story-deps'];
-                        }
-                    });
-                }
-
-                new Notice(`Removed dependency: ${dep.basename}`);
-                // Bypass pollSelection ID lock and force visual refresh
-                setTimeout(() => this.renderInspector(node), 50); 
-            });
-        });
-    }
-
-    new Setting(depsCard)
+    
+    const depsBtnGroup = new Setting(depsCard)
+      .addButton(btn => btn
+        .setButtonText('Show Dependencies')
+        .setTooltip('View and delete active dependencies')
+        .onClick(() => {
+            new ShowDependenciesModal(this.app, this.plugin, node, node.file!, currentDeps, () => {
+                this.renderInspector(node); // Force refresh UI
+            }).open();
+        })
+      )
       .addButton(btn => btn
         .setButtonText('+ Add Dependency')
+        .setCta()
         .onClick(() => {
             new SetDependenciesModal(this.plugin, node.file!, () => {
                 this.renderInspector(node); // Force refresh UI
@@ -471,4 +438,102 @@ export class StoryboardInspectorView extends ItemView {
       });
       viewport.appendChild(validOverlay);
   }
+}
+
+// ─── Show Dependencies Modal ───
+export class ShowDependenciesModal extends Modal {
+    plugin: StoryboardCanvasPlugin;
+    sourceFile: TFile;
+    node: any;
+    currentDeps: { type: 'before'|'after', basename: string }[];
+    onComplete: () => void;
+
+    constructor(
+        app: App, 
+        plugin: StoryboardCanvasPlugin, 
+        node: any,
+        sourceFile: TFile, 
+        currentDeps: { type: 'before'|'after', basename: string }[],
+        onComplete: () => void
+    ) {
+        super(app);
+        this.plugin = plugin;
+        this.node = node;
+        this.sourceFile = sourceFile;
+        this.currentDeps = currentDeps;
+        this.onComplete = onComplete;
+    }
+
+    onOpen() {
+        const {contentEl} = this;
+        contentEl.empty();
+        
+        contentEl.createEl('h2', { text: `Dependencies for ${this.sourceFile.basename}` });
+
+        const depsContainer = contentEl.createDiv({ cls: 'storyboard-deps-list' });
+        depsContainer.style.maxHeight = '400px';
+        depsContainer.style.padding = '10px';
+        depsContainer.style.overflowY = 'auto';
+        
+        if (this.currentDeps.length === 0) {
+            depsContainer.createEl('p', { text: 'No dependencies set. Use the Add Dependency button to create one.', cls: 'storyflow-subtext' });
+        } else {
+            this.currentDeps.forEach(dep => {
+                const tagEl = depsContainer.createEl('div', { cls: `storyflow-dep-tag dep-${dep.type}` });
+                tagEl.style.marginBottom = '8px';
+                tagEl.style.display = 'flex';
+                tagEl.style.justifyContent = 'space-between';
+                tagEl.style.alignItems = 'center';
+                tagEl.setText(`${dep.type === 'before' ? 'Before:' : 'After:'} ${dep.basename}`);
+                
+                const removeBtn = tagEl.createEl('span', { text: '✕', cls: 'storyflow-dep-remove clickable-icon' });
+                removeBtn.style.marginLeft = '10px';
+                removeBtn.style.color = 'var(--text-error)';
+                removeBtn.style.fontWeight = 'bold';
+                removeBtn.style.cursor = 'pointer';
+                
+                removeBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const depStr = `${dep.basename}:${dep.type}`;
+                    const inverseType = dep.type === 'before' ? 'after' : 'before';
+                    const inverseDepStr = `${this.sourceFile.basename}:${inverseType}`;
+
+                    // 1. Remove from THIS file
+                    await this.app.fileManager.processFrontMatter(this.sourceFile, (fm) => {
+                        const arr = fm['story-deps'];
+                        if (Array.isArray(arr)) {
+                            fm['story-deps'] = arr.filter(d => d !== depStr);
+                            if (fm['story-deps'].length === 0) delete fm['story-deps'];
+                        }
+                    });
+
+                    // 2. Remove from TARGET file (Two-way data binding)
+                    const targetFile = this.app.vault.getMarkdownFiles().find(f => f.basename === dep.basename);
+                    if (targetFile) {
+                        await this.app.fileManager.processFrontMatter(targetFile, (fm) => {
+                            const arr = fm['story-deps'];
+                            if (Array.isArray(arr)) {
+                                fm['story-deps'] = arr.filter(d => d !== inverseDepStr);
+                                if (fm['story-deps'].length === 0) delete fm['story-deps'];
+                            }
+                        });
+                    }
+
+                    new Notice(`Removed dependency: ${dep.basename}`);
+                    
+                    // Filter the deleted item from UI state to avoid a disruptive entire modal reload
+                    this.currentDeps = this.currentDeps.filter(d => d.basename !== dep.basename);
+                    
+                    // Trigger a re-render of just this modal's content
+                    this.onOpen();
+                });
+            });
+        }
+    }
+
+    onClose() {
+        const {contentEl} = this;
+        contentEl.empty();
+        this.onComplete();
+    }
 }
