@@ -45,6 +45,25 @@ export class StoryboardInspectorView extends ItemView {
 
     // Poll selection every 300ms since Canvas API doesn't expose native selection events
     this.pollInterval = window.setInterval(() => this.pollSelection(), 300);
+
+    // Phase 6: Sync UI when frontmatter dependencies change
+    this.registerEvent(
+      this.app.metadataCache.on('changed', (file) => {
+        if (!this.activeNodeId) return;
+        
+        // Don't interrupt if the user is actively typing in a text field!
+        if (this.container?.contains(document.activeElement)) return;
+        
+        const canvas = this.plugin.canvasManager.getActiveCanvas();
+        if (!canvas) return;
+        
+        const targetNode = canvas.nodes.get(this.activeNodeId);
+        if (targetNode && targetNode.getData().type === 'file' && targetNode.file?.path === file.path) {
+            // Wait slightly for cache to settle
+            setTimeout(() => this.renderInspector(targetNode as CanvasNode), 50);
+        }
+      })
+    );
   }
 
   async onClose() {
@@ -103,7 +122,11 @@ export class StoryboardInspectorView extends ItemView {
     this.clearConstraintOverlays();
     if (!node.file) return;
 
-    this.container.createEl('h4', { text: node.file.basename });
+    const innerContainer = this.container.createDiv({ cls: 'storyboard-inspector-inner' });
+    
+    const headerEl = innerContainer.createDiv({ cls: 'storyboard-inspector-header' });
+    headerEl.createEl('h3', { text: node.file.basename });
+    headerEl.createEl('div', { text: 'Storyboard Node', cls: 'storyflow-subtext' });
 
     const cache = this.app.metadataCache.getFileCache(node.file);
     const fm: Record<string, any> = cache?.frontmatter || {};
@@ -130,95 +153,75 @@ export class StoryboardInspectorView extends ItemView {
       }
     }
 
-    // ─── Phase 5: Calculate Bounding Dates ───
-    let boundsStr = 'Format must match plugin settings regex.';
+    // ─── Phase 6: Unified Constraint Window (Dependencies + Arc) ───
+    let earliestPossible: number[] | null = null;
+    let latestPossible: number[] | null = null;
+    let earliestSource = '-∞';
+    let latestSource = '+∞';
+
     const canvas = this.plugin.canvasManager.getActiveCanvas();
-    try {
-      if (currentArc && currentDateRaw && canvas) {
+    if (canvas) {
+      try {
         const scenes = await this.plugin.canvasManager.extractScenes(canvas);
-        const arcScenes = scenes
-          .filter(s => s.arc === currentArc)
-          .sort((a, b) => {
-             // AbstractDate is number[] (e.g. [year, month, day])
-             const len = Math.max(a.date.length, b.date.length);
-             for (let i = 0; i < len; i++) {
-                 const aVal = a.date[i] || 0;
-                 const bVal = b.date[i] || 0;
-                 if (aVal !== bVal) return aVal - bVal;
-             }
-             return 0;
-          });
-          
-        const myIndex = arcScenes.findIndex(s => s.nodeId === node.getData().id);
-        if (myIndex !== -1) {
-          const prev = myIndex > 0 ? arcScenes[myIndex - 1] : null;
-          const next = myIndex < arcScenes.length - 1 ? arcScenes[myIndex + 1] : null;
-          
-          const prevStr = prev ? `${prev.title} (${formatAbstractDate(prev.date, this.plugin.settings.dateSettings)})` : 'None';
-          const nextStr = next ? `${next.title} (${formatAbstractDate(next.date, this.plugin.settings.dateSettings)})` : 'None';
-          
-          boundsStr = `Preceding: ${prevStr}\nProceeding: ${nextStr}`;
+        
+        // 1. Arc Constraints
+        if (currentArc) {
+          const arcScenes = scenes
+            .filter(s => s.arc === currentArc)
+            .sort((a, b) => this.compareAbstractDates(a.date, b.date));
+            
+          const myIndex = arcScenes.findIndex(s => s.nodeId === node.getData().id);
+          if (myIndex !== -1) {
+            const prev = myIndex > 0 ? arcScenes[myIndex - 1] : null;
+            const next = myIndex < arcScenes.length - 1 ? arcScenes[myIndex + 1] : null;
+            
+            if (prev) {
+              earliestPossible = prev.date;
+              earliestSource = `${prev.title} (Arc)`;
+            }
+            if (next) {
+              latestPossible = next.date;
+              latestSource = `${next.title} (Arc)`;
+            }
+          }
         }
-      }
-    } catch(e) { /* ignore extraction errors safely */ }
 
-    // ─── Phase 6: Calculate Constraint Window ───
-    let constraintEarliestX = -Infinity;
-    let constraintLatestX = Infinity;
-    let constraintStr = 'No constraints via dependencies.';
+        // 2. Dependency Constraints
+        for (const dep of currentDeps) {
+          const targetScene = scenes.find(s => s.file.basename === dep.basename);
+          if (!targetScene) continue;
 
-    if (currentDeps.length > 0 && canvas) {
-        try {
-            const scenes = await this.plugin.canvasManager.extractScenes(canvas);
-            
-            let maxBeforeDate: number[] | null = null;
-            let minAfterDate: number[] | null = null;
-            let maxBeforeScene: any = null;
-            let minAfterScene: any = null;
-
-            for (const dep of currentDeps) {
-                const targetScene = scenes.find(s => s.file.basename === dep.basename);
-                if (!targetScene) continue;
-
-                if (dep.type === 'before') {
-                    // This node must be BEFORE the target
-                    // So the target is the LATEST possible boundary
-                    if (!minAfterDate || this.compareAbstractDates(targetScene.date, minAfterDate) < 0) {
-                        minAfterDate = targetScene.date;
-                        minAfterScene = targetScene;
-                    }
-                } else if (dep.type === 'after') {
-                    // This node must be AFTER the target
-                    // So the target is the EARLIEST possible boundary
-                    if (!maxBeforeDate || this.compareAbstractDates(targetScene.date, maxBeforeDate) > 0) {
-                        maxBeforeDate = targetScene.date;
-                        maxBeforeScene = targetScene;
-                    }
-                }
+          if (dep.type === 'after') {
+            // This node must be AFTER the target -> Target is an Earliest Boundary
+            if (!earliestPossible || this.compareAbstractDates(targetScene.date, earliestPossible) > 0) {
+              earliestPossible = targetScene.date;
+              earliestSource = `${targetScene.title} (Dep)`;
             }
-
-            const eStr = maxBeforeScene ? formatAbstractDate(maxBeforeDate!, this.plugin.settings.dateSettings) : '-∞';
-            const lStr = minAfterScene ? formatAbstractDate(minAfterDate!, this.plugin.settings.dateSettings) : '+∞';
-            
-            if (maxBeforeScene || minAfterScene) {
-                constraintStr = `Calculated window:\n${eStr}  ➔  ${lStr}`;
+          } else if (dep.type === 'before') {
+            // This node must be BEFORE the target -> Target is a Latest Boundary
+            if (!latestPossible || this.compareAbstractDates(targetScene.date, latestPossible) < 0) {
+              latestPossible = targetScene.date;
+              latestSource = `${targetScene.title} (Dep)`;
             }
-
-            // Calculate pixel coords for the canvas overlays
-            if (maxBeforeScene) {
-                const targetCanvasNode = Array.from(canvas.nodes.values()).find(n => n.getData().id === maxBeforeScene!.nodeId);
-                if (targetCanvasNode) constraintEarliestX = targetCanvasNode.x;
-            }
-            if (minAfterScene) {
-                const targetCanvasNode = Array.from(canvas.nodes.values()).find(n => n.getData().id === minAfterScene!.nodeId);
-                if (targetCanvasNode) constraintLatestX = targetCanvasNode.x;
-            }
-
-        } catch(e) { /* fallback */ }
+          }
+        }
+      } catch(e) { /* fallback */ }
     }
 
+    const eStr = earliestPossible ? formatAbstractDate(earliestPossible, this.plugin.settings.dateSettings) : '-∞';
+    const lStr = latestPossible ? formatAbstractDate(latestPossible, this.plugin.settings.dateSettings) : '+∞';
+    
+    let windowDesc = 'Allowed Window: Any date';
+    if (earliestPossible || latestPossible) {
+      windowDesc = `Allowed: ${eStr} ➔ ${lStr}\nBounded by: [${earliestSource}] and [${latestSource}]`;
+    }
+
+    // --- Properties Card ---
+    const propsCard = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
+    propsCard.createEl('h4', { text: 'Properties' });
+
     // --- Arc Editor ---
-    const arcSetting = new Setting(this.container)
+    const arcSetting = new Setting(propsCard)
       .setName('Story Arc')
       .setDesc('Which lane or plotline this scene belongs to.');
 
@@ -282,9 +285,9 @@ export class StoryboardInspectorView extends ItemView {
     renderArcDropdown();
 
     // --- Date String Editor ---
-    new Setting(this.container)
+    new Setting(propsCard)
       .setName('Story Date')
-      .setDesc(boundsStr)
+      .setDesc(windowDesc)
       .addText(text => {
         text.setValue(currentDateRaw)
             .setPlaceholder('YYYY-MM-DD');
@@ -310,21 +313,21 @@ export class StoryboardInspectorView extends ItemView {
         });
       });
 
-    // --- Dependencies List ---
-    this.container.createEl('h4', { text: 'Dependencies' });
-    const depsContainer = this.container.createDiv({ cls: 'storyboard-deps-list' });
+    // --- Dependencies Card ---
+    const depsCard = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
+    depsCard.createEl('h4', { text: 'Dependencies' });
+    const depsContainer = depsCard.createDiv({ cls: 'storyboard-deps-list' });
     if (currentDeps.length === 0) {
         depsContainer.createEl('span', { text: 'No dependencies set.', cls: 'storyflow-subtext' });
     } else {
         currentDeps.forEach(dep => {
-            const depItem = depsContainer.createDiv({ cls: 'storyflow-dep-item' });
-            depItem.createEl('div', { 
-                text: `${dep.type === 'before' ? 'Before:' : 'After:'} ${dep.basename}`,
-                cls: `storyflow-dep-tag dep-${dep.type}`
-            });
-            const removeBtn = depItem.createEl('button', { text: '✕', cls: 'storyflow-dep-remove' });
+            const tagEl = depsContainer.createEl('span', { cls: `storyflow-dep-tag dep-${dep.type}` });
+            tagEl.setText(`${dep.type === 'before' ? 'Before:' : 'After:'} ${dep.basename}`);
             
-            removeBtn.onclick = async () => {
+            const removeBtn = tagEl.createEl('span', { text: '✕', cls: 'storyflow-dep-remove clickable-icon' });
+            
+            removeBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
                 const depStr = `${dep.basename}:${dep.type}`;
                 const inverseType = dep.type === 'before' ? 'after' : 'before';
                 const inverseDepStr = `${node.file!.basename}:${inverseType}`;
@@ -351,52 +354,36 @@ export class StoryboardInspectorView extends ItemView {
                 }
 
                 new Notice(`Removed dependency: ${dep.basename}`);
-                setTimeout(() => this.pollSelection(), 50); // Refresh immediately
-            };
+                // Bypass pollSelection ID lock and force visual refresh
+                setTimeout(() => this.renderInspector(node), 50); 
+            });
         });
     }
 
-    new Setting(this.container)
+    new Setting(depsCard)
       .addButton(btn => btn
         .setButtonText('+ Add Dependency')
         .onClick(() => {
             new SetDependenciesModal(this.plugin, node.file!, () => {
-                this.pollSelection(); // Refresh Inspector when modal closes
+                this.renderInspector(node); // Force refresh UI
             }).open();
         })
       );
 
-    // --- Constraint Window Toggle ---
-    new Setting(this.container)
-      .setName('Show constraint window')
-      .setDesc(constraintStr)
-      .addToggle(toggle => {
-          toggle.setValue(this.showConstraintWindow)
-                .onChange(val => {
-                    this.showConstraintWindow = val;
-                    if (val) {
-                        this.renderConstraintOverlays(canvas, constraintEarliestX, constraintLatestX);
-                    } else {
-                        this.clearConstraintOverlays();
-                    }
-                });
-      });
-      
-    // Re-apply safely on reload if toggle left on
-    if (this.showConstraintWindow && canvas) {
-        this.renderConstraintOverlays(canvas, constraintEarliestX, constraintLatestX);
-    }
 
-    // --- Date Slider (X-Axis Control) ---
-    this.container.createEl('h4', { text: 'Timeline Nudge', cls: 'timeline-slider-header' });
-    this.container.createEl('p', { 
+
+    // --- Timeline Nudge Card ---
+    const timelineCard = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
+    timelineCard.createEl('h4', { text: 'Timeline Nudge', cls: 'timeline-slider-header' });
+    timelineCard.createEl('p', { 
       text: 'Slide left/right to move the node on the timeline. Release to sync changes to frontmatter.',
       cls: 'setting-item-description'
     });
 
-    const sliderContainer = this.container.createDiv({ cls: 'timeline-slider-container' });
-    const slider = sliderContainer.createEl('input');
+    const sliderContainer = timelineCard.createDiv({ cls: 'timeline-slider-container' });
+    const slider = sliderContainer.createEl('input', { cls: 'slider' });
     slider.type = 'range';
+    slider.style.width = '100%';
     
     // We treat the slider as ±1000 pixels from its CURRENT canvas location
     const startX = node.x;

@@ -86,5 +86,18 @@ export class StoryboardSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }
         }));
+
+    new Setting(containerEl)
+      .setName('Playback Speed (ms)')
+      .setDesc('Milliseconds between scenes during animated playback.')
+      .addText(text => text
+        .setValue(String(this.plugin.settings.layoutConfig.playbackSpeed))
+        .onChange(async (value) => {
+          const num = parseInt(value, 10);
+          if (!isNaN(num)) {
+            this.plugin.settings.layoutConfig.playbackSpeed = num;
+            await this.plugin.saveSettings();
+          }
+        }));
   }
 }

@@ -96,6 +96,8 @@ export interface LayoutConfig {
   nodeHeight: number;
   /** Minimum X gap between consecutive nodes on the same arc. */
   nodeGapX: number;
+  /** Playback speed for animations, in milliseconds per unit. */
+  playbackSpeed: number;
 }
 
 export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
@@ -105,6 +107,7 @@ export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   nodeWidth: 400,
   nodeHeight: 300,
   nodeGapX: 50,
+  playbackSpeed: 1500,
 };
 
 // ─── Date Format Settings ────────────────────────────────────

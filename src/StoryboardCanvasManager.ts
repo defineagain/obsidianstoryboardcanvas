@@ -10,7 +10,7 @@ import type { Canvas, CanvasNode, CanvasEdgeData, CanvasNodeData } from './Canva
 import type { StoryEvent, LayoutConfig, DateFormatSettings } from './canvasTypes';
 import { DEFAULT_LAYOUT_CONFIG, DEFAULT_DATE_FORMAT_SETTINGS } from './canvasTypes';
 import { getAbstractDateFromMetadata, getArcFromMetadata, getTitleFromMetadata } from './dateParser';
-import { formatAbstractDate } from './dateFormatter';
+import { formatAbstractDate, calculateDateInterval } from './dateFormatter';
 import { calculateLayout, compareAbstractDates } from './layoutEngine';
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -180,7 +180,7 @@ export class StoryboardCanvasManager {
         );
         if (exists) continue;
 
-        const label = formatAbstractDate(to.date, this.dateSettings);
+        const label = calculateDateInterval(from.date, to.date);
         canvasData.edges.push({
           id: randomId(),
           fromNode: from.nodeId,
@@ -429,8 +429,9 @@ export class StoryboardCanvasManager {
 
   async playStoryboard(
     canvas: Canvas,
-    delayMs: number = 1500,
+    delayMs?: number,
   ): Promise<void> {
+    const delay = delayMs ?? this.layoutConfig.playbackSpeed ?? 1500;
     const scenes = await this.extractScenes(canvas);
     if (scenes.length === 0) {
       new Notice('No scenes with story-date found.');
@@ -450,7 +451,7 @@ export class StoryboardCanvasManager {
         maxX: data.x + data.width + 50,
         maxY: data.y + data.height + 50,
       });
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
     new Notice('Playback complete.');
   }

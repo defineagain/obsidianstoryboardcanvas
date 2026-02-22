@@ -236,26 +236,27 @@ class DependencyTypeModal extends Modal {
     const btnContainer = contentEl.createDiv({ cls: 'storyflow-flex-row' });
     
     const beforeBtn = btnContainer.createEl('button', { text: 'Happens BEFORE' });
-    beforeBtn.onclick = async () => {
+    beforeBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
       await this.saveDependency('before');
       this.close();
-    };
+    });
 
     const afterBtn = btnContainer.createEl('button', { text: 'Happens AFTER' });
-    afterBtn.onclick = async () => {
+    afterBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
       await this.saveDependency('after');
       this.close();
-    };
+    });
   }
 
   private async saveDependency(type: 'before' | 'after') {
     const depStr = `${this.targetBasename}:${type}`;
     await this.app.fileManager.processFrontMatter(this.file, (fm) => {
-      if (!fm['story-deps']) fm['story-deps'] = [];
-      if (!Array.isArray(fm['story-deps'])) fm['story-deps'] = [fm['story-deps']];
-      if (!fm['story-deps'].includes(depStr)) {
-        fm['story-deps'].push(depStr);
-      }
+      let deps = fm['story-deps'] || [];
+      if (!Array.isArray(deps)) deps = [deps];
+      if (!deps.includes(depStr)) deps = [...deps, depStr];
+      fm['story-deps'] = deps;
     });
 
     // Two-way data binding
@@ -265,11 +266,10 @@ class DependencyTypeModal extends Modal {
     const targetFile = this.app.vault.getMarkdownFiles().find(f => f.basename === this.targetBasename);
     if (targetFile) {
       await this.app.fileManager.processFrontMatter(targetFile, (fm) => {
-        if (!fm['story-deps']) fm['story-deps'] = [];
-        if (!Array.isArray(fm['story-deps'])) fm['story-deps'] = [fm['story-deps']];
-        if (!fm['story-deps'].includes(inverseDepStr)) {
-          fm['story-deps'].push(inverseDepStr);
-        }
+        let deps = fm['story-deps'] || [];
+        if (!Array.isArray(deps)) deps = [deps];
+        if (!deps.includes(inverseDepStr)) deps = [...deps, inverseDepStr];
+        fm['story-deps'] = deps;
       });
       new Notice(`Linked: ${this.file.basename} & ${this.targetBasename}`);
     } else {

@@ -1,6 +1,6 @@
 {
   "name": "obsidian-storyboard-canvas",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Canvas-based storyboarding with timeline layout for Obsidian",
   "main": "main.js",
   "scripts": {
