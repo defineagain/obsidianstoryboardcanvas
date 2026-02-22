@@ -28,8 +28,33 @@ export function registerCanvasHooks(plugin: StoryboardCanvasPlugin) {
                 requestSave: (next: Function) => function(this: any, ...args: any[]) {
                     const result = next.call(this, ...args);
                     
+                    // --- LAZY PATCH NODE PROTOTYPES ONCE NODES EXIST ---
+                    if (!patched) {
+                        const anyNode = this.nodes?.values()?.next()?.value;
+                        if (anyNode) {
+                            const nodeProto = Object.getPrototypeOf(Object.getPrototypeOf(anyNode));
+                            if (nodeProto && nodeProto.showMenu) {
+                                plugin.register(
+                                    around(nodeProto, {
+                                        showMenu: (nextMenu: Function) => function(this: any, ...menuArgs: any[]) {
+                                            const menuResult = nextMenu.call(this, ...menuArgs);
+                                            setTimeout(() => {
+                                                const menuEl = document.body.querySelector('.canvas-node-menu') as HTMLElement;
+                                                if (menuEl) {
+                                                    injectCanvasMenuButton(menuEl, plugin);
+                                                }
+                                            }, 0);
+                                            return menuResult;
+                                        }
+                                    })
+                                );
+                                patched = true;
+                                plugin.app.workspace.offref(leafEvent);
+                            }
+                        }
+                    }
+                    
                     // If the Inspector is open, manually tell it to update 
-                    // (Obsidian calls requestSave when selection changes)
                     const inspectorLeaves = plugin.app.workspace.getLeavesOfType(INSPECTOR_VIEW_TYPE);
                     for (const leaf of inspectorLeaves) {
                         if (leaf.view instanceof StoryboardInspectorView) {
@@ -41,33 +66,6 @@ export function registerCanvasHooks(plugin: StoryboardCanvasPlugin) {
                 }
             })
         );
-    }
-
-    // ─── 2. Hook into the Node Menu spawn (replaces 250ms body poller) ───
-    const anyNode = canvasView.canvas.nodes?.values()?.next()?.value;
-    if (anyNode) {
-        const nodeProto = Object.getPrototypeOf(Object.getPrototypeOf(anyNode));
-        if (nodeProto && nodeProto.showMenu) {
-            plugin.register(
-                around(nodeProto, {
-                    showMenu: (next: Function) => function(this: any, ...args: any[]) {
-                        const result = next.call(this, ...args);
-                        
-                        // Wait a tick for the menu to hit the DOM
-                        setTimeout(() => {
-                            const menuEl = document.body.querySelector('.canvas-node-menu') as HTMLElement;
-                            if (menuEl) {
-                                injectCanvasMenuButton(menuEl, plugin);
-                            }
-                        }, 0);
-                        
-                        return result;
-                    }
-                })
-            );
-            patched = true;
-            plugin.app.workspace.offref(leafEvent);
-        }
     }
   };
 
