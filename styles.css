@@ -21,6 +21,11 @@
   color: var(--text-normal);
 }
 
+.storyboard-inspector-title {
+  text-align: center !important;
+  width: 100%;
+}
+
 .storyflow-inspector-card {
   background-color: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);

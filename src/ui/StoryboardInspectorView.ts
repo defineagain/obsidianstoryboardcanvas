@@ -38,8 +38,7 @@ export class StoryboardInspectorView extends ItemView {
     containerEl.empty();
     containerEl.addClass('storyboard-inspector-view');
 
-    const titleEl = containerEl.createEl('h3', { text: 'Storyboard Inspector' });
-    titleEl.style.textAlign = 'center';
+    const titleEl = containerEl.createEl('h3', { text: 'Storyboard Inspector', cls: 'storyboard-inspector-title' });
     this.container = containerEl.createDiv({ cls: 'inspector-content' });
 
     this.renderEmptyState();
