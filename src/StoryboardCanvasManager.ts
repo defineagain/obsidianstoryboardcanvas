@@ -127,7 +127,7 @@ export class StoryboardCanvasManager {
   // ─── Sort / Layout ───────────────────────────────────────
 
   /**
-   * Sort: read dates, compute layout, move nodes.
+   * Sort: compute layout and mutate canvas nodes in memory.
    */
   async sortStoryboard(canvas: Canvas): Promise<void> {
     const scenes = await this.extractScenes(canvas);
@@ -136,35 +136,41 @@ export class StoryboardCanvasManager {
       return;
     }
 
+    const canvasData = canvas.getData();
+    this.applySortToData(canvasData, scenes);
+    
+    canvas.setData(canvasData);
+    canvas.requestSave();
+    
+    // Defer pushing CSS DOM classes slightly to allow the React layer to reconstruct nodes
+    this.applyTensionClasses(canvas, scenes);
+    new Notice(`Sorted ${scenes.length} scenes by date.`);
+  }
+
+  private applySortToData(canvasData: any, scenes: StoryEvent[]): void {
     const positions = calculateLayout(scenes, this.layoutConfig);
-
     for (const [nodeId, pos] of positions) {
-      const node = canvas.nodes.get(nodeId);
-      if (!node) continue;
-      const data = node.getData();
-      node.setData({
-        ...data,
-        x: pos.x,
-        y: pos.y,
-        width: this.layoutConfig.nodeWidth,
-        height: this.layoutConfig.nodeHeight,
-      });
-
-      // Apply heatmap styling if available
-      const event = scenes.find((s) => s.nodeId === nodeId);
-      if (node.nodeEl) {
-        // Clear old tension classes
-        for (let t = 1; t <= 10; t++) {
-          node.nodeEl.classList.remove(`storyboard-tension-${t}`);
-        }
-        if (event?.tension) {
-          node.nodeEl.classList.add(`storyboard-tension-${Math.floor(event.tension)}`);
-        }
+      const node = canvasData.nodes.find((n: any) => n.id === nodeId);
+      if (node) {
+        node.x = pos.x;
+        node.y = pos.y;
+        node.width = this.layoutConfig.nodeWidth;
+        node.height = this.layoutConfig.nodeHeight;
       }
     }
+  }
 
-    canvas.requestSave();
-    new Notice(`Sorted ${scenes.length} scenes by date.`);
+  private applyTensionClasses(canvas: Canvas, scenes: StoryEvent[]): void {
+    setTimeout(() => {
+      for (const scene of scenes) {
+        const node = canvas.nodes.get(scene.nodeId);
+        if (node?.nodeEl) {
+          for (let t = 1; t <= 10; t++) node.nodeEl.classList.remove(`storyboard-tension-${t}`);
+          if (scene.tension) Object.keys(node.nodeEl.classList).length; // flush
+          if (scene.tension) node.nodeEl.classList.add(`storyboard-tension-${Math.floor(scene.tension)}`);
+        }
+      }
+    }, 150);
   }
 
   // ─── Chronological Connections ───────────────────────────
@@ -179,6 +185,17 @@ export class StoryboardCanvasManager {
       return;
     }
 
+    const canvasData = canvas.getData();
+    const count = this.applyChronologicalEdgesToData(canvasData, scenes);
+
+    if (count > 0) {
+      canvas.setData(canvasData);
+      canvas.requestSave();
+    }
+    new Notice(`Connected ${count} chronological scene pairs.`);
+  }
+
+  private applyChronologicalEdgesToData(canvasData: any, scenes: StoryEvent[]): number {
     const arcGroups = new Map<string, StoryEvent[]>();
     for (const scene of scenes) {
       const group = arcGroups.get(scene.arc) ?? [];
@@ -187,21 +204,25 @@ export class StoryboardCanvasManager {
     }
 
     let edgeCount = 0;
-    const canvasData = canvas.getData();
+    
+    // Purge any old generated chrono edges to prevent overlaps when switching layouts
+    canvasData.edges = canvasData.edges.filter((e: any) => !e.id?.startsWith(`${this.MARKER_PREFIX}edge-chrono`));
 
     for (const [, group] of arcGroups) {
       group.sort((a, b) => compareAbstractDates(a.date, b.date));
       for (let i = 0; i < group.length - 1; i++) {
         const from = group[i];
         const to = group[i + 1];
-        const exists = canvasData.edges.some(
-          (e) => e.fromNode === from.nodeId && e.toNode === to.nodeId,
+        
+        // Skip if user manually created an edge identical to this
+        const existsUser = canvasData.edges.some(
+          (e: any) => e.fromNode === from.nodeId && e.toNode === to.nodeId && !e.id?.startsWith(this.MARKER_PREFIX)
         );
-        if (exists) continue;
+        if (existsUser) continue;
 
         const label = calculateDateInterval(from.date, to.date);
         canvasData.edges.push({
-          id: randomId(),
+          id: `${this.MARKER_PREFIX}edge-chrono-${randomId()}`,
           fromNode: from.nodeId,
           toNode: to.nodeId,
           fromSide: 'right',
@@ -212,12 +233,7 @@ export class StoryboardCanvasManager {
         edgeCount++;
       }
     }
-
-    if (edgeCount > 0) {
-      canvas.setData(canvasData);
-      canvas.requestSave();
-    }
-    new Notice(`Connected ${edgeCount} scene pairs across ${arcGroups.size} arc(s).`);
+    return edgeCount;
   }
 
   // ─── Cross-Link Edges (from [[wikilinks]]) ───────────────
@@ -228,26 +244,33 @@ export class StoryboardCanvasManager {
    * This follows the enhanced-canvas "Add edges according to links" pattern.
    */
   async connectByLinks(canvas: Canvas): Promise<void> {
-    const resolvedLinks = this.app.metadataCache.resolvedLinks;
     const canvasData = canvas.getData();
+    const count = this.applyCrossLinksToData(canvasData, this.app.metadataCache.resolvedLinks);
 
-    // Build path→nodeId map for file nodes on canvas
+    if (count > 0) {
+      canvas.setData(canvasData);
+      canvas.requestSave();
+    }
+    new Notice(`Created ${count} cross-link edges from [[wikilinks]].`);
+  }
+
+  private applyCrossLinksToData(canvasData: any, resolvedLinks: Record<string, Record<string, number>>): number {
     const pathToNodeId = new Map<string, string>();
-    for (const [id, node] of canvas.nodes) {
-      const data = node.getData();
-      if (data.type === 'file' && data.file) {
-        pathToNodeId.set(data.file, id);
+    for (const node of canvasData.nodes) {
+      if (node.type === 'file' && node.file) {
+        pathToNodeId.set(node.file, node.id);
       }
     }
+    
+    // Purge any old generated link edges
+    canvasData.edges = canvasData.edges.filter((e: any) => !e.id?.startsWith(`${this.MARKER_PREFIX}edge-link`));
 
-    // Build existing edge set
     const existingEdges = new Set<string>();
     for (const edge of canvasData.edges) {
       existingEdges.add(`${edge.fromNode}->${edge.toNode}`);
     }
 
     let edgeCount = 0;
-
     for (const [sourcePath, sourceNodeId] of pathToNodeId) {
       const links = resolvedLinks[sourcePath];
       if (!links) continue;
@@ -260,7 +283,7 @@ export class StoryboardCanvasManager {
         if (existingEdges.has(edgeKey)) continue;
 
         canvasData.edges.push({
-          id: randomId(),
+          id: `${this.MARKER_PREFIX}edge-link-${randomId()}`,
           fromNode: sourceNodeId,
           toNode: targetNodeId,
           fromSide: 'bottom',
@@ -272,12 +295,7 @@ export class StoryboardCanvasManager {
         edgeCount++;
       }
     }
-
-    if (edgeCount > 0) {
-      canvas.setData(canvasData);
-      canvas.requestSave();
-    }
-    new Notice(`Created ${edgeCount} cross-link edges from [[wikilinks]].`);
+    return edgeCount;
   }
 
   // ─── Full Storyboard (sort + connect all) ────────────────
@@ -287,35 +305,35 @@ export class StoryboardCanvasManager {
    * add cross-link edges from [[wikilinks]], and add visual markers.
    */
   async buildStoryboard(canvas: Canvas): Promise<void> {
-    // Diagnostics
-    const totalNodes = canvas.nodes.size;
     const scenes = await this.extractScenes(canvas);
-    const skipped = totalNodes - scenes.length;
-
     if (scenes.length === 0) {
-      new Notice(
-        `No scenes found. ${totalNodes} nodes on canvas but none have story-date frontmatter. ` +
-        `Use "Tag scene" command on each note first.`
-      );
+      new Notice('No scenes with story-date found on this canvas. Use "Tag scene" command on each note first.');
       return;
     }
 
-    if (skipped > 0) {
-      new Notice(`Found ${scenes.length} tagged scenes (${skipped} nodes skipped — no story-date).`);
-    }
+    const canvasData = canvas.getData();
 
-    // Clean old markers before rebuilding
-    this.removeMarkerNodes(canvas);
+    // 1. Clean old marker nodes (text labels for dates & arcs)
+    canvasData.nodes = canvasData.nodes.filter((n: any) => !n.id?.startsWith(this.MARKER_PREFIX));
+    // 2. Clean old marker edges (generated chrono and links)
+    canvasData.edges = canvasData.edges.filter((e: any) => !e.id?.startsWith(this.MARKER_PREFIX));
 
-    await this.sortStoryboard(canvas);
-    await this.connectChronologically(canvas);
-    await this.connectByLinks(canvas);
-    this.addVisualMarkers(canvas, scenes);
+    // 3. Mutate payload simultaneously to bypass async React Node DOM recreation
+    this.applySortToData(canvasData, scenes);
+    this.applyChronologicalEdgesToData(canvasData, scenes);
+    this.applyCrossLinksToData(canvasData, this.app.metadataCache.resolvedLinks);
+    this.addVisualMarkersToData(canvasData, scenes);
+
+    // 4. Exclusively commit state exactly once
+    canvas.setData(canvasData);
+    canvas.requestSave();
+
+    this.applyTensionClasses(canvas, scenes);
 
     new Notice(`Storyboard built: ${scenes.length} scenes, sorted + connected + labelled.`);
   }
 
-  // ─── Visual Markers ──────────────────────────────────────
+  // ─── Visual Markers (UI labels) ─────────────────────────
 
   private readonly MARKER_PREFIX = 'storyboard-marker-';
 
@@ -334,40 +352,36 @@ export class StoryboardCanvasManager {
   /**
    * Add arc lane labels on the left and date markers along the top.
    */
-  private addVisualMarkers(canvas: Canvas, scenes: StoryEvent[]): void {
-    const canvasData = canvas.getData();
-
+  private addVisualMarkersToData(canvasData: any, scenes: StoryEvent[]): void {
     // Discover arc lanes and their Y positions from current node positions
     const arcYPositions = new Map<string, number>();
-    const dateXPositions = new Map<string, number>(); // date label → X
+    const dateXPositions = new Map<string, number>();
 
     for (const scene of scenes) {
-      const node = canvas.nodes.get(scene.nodeId);
+      const node = canvasData.nodes.find((n: any) => n.id === scene.nodeId);
       if (!node) continue;
-      const data = node.getData();
 
-      // Track arc Y (use first occurrence)
-      if (!arcYPositions.has(scene.arc)) {
-        arcYPositions.set(scene.arc, data.y);
-      }
+      if (!arcYPositions.has(scene.arc)) arcYPositions.set(scene.arc, node.y);
 
-      // Track unique dates and their X positions
       const dateLabel = formatAbstractDate(scene.date, this.dateSettings);
-      if (!dateXPositions.has(dateLabel)) {
-        dateXPositions.set(dateLabel, data.x);
-      }
+      if (!dateXPositions.has(dateLabel)) dateXPositions.set(dateLabel, node.x);
     }
 
     const labelWidth = 200;
     const labelHeight = 60;
-    const headerY = Math.min(...arcYPositions.values()) - labelHeight - 80;
+    
+    // Safety fallback for empty layouts
+    const arcVals = Array.from(arcYPositions.values());
+    const headerY = arcVals.length > 0 ? Math.min(...arcVals) - labelHeight - 80 : 0;
 
-    // Add arc lane labels (left side)
-    const minX = Math.min(...dateXPositions.values());
+    const xVals = Array.from(dateXPositions.values());
+    const minX = xVals.length > 0 ? Math.min(...xVals) : 0;
     const labelX = minX - labelWidth - 60;
+
+    // Add arc lane labels
     let arcIndex = 0;
     for (const [arcName, y] of arcYPositions) {
-      const colors = ['1', '2', '3', '4', '5', '6']; // Obsidian canvas colors
+      const colors = ['1', '2', '3', '4', '5', '6'];
       canvasData.nodes.push({
         id: `${this.MARKER_PREFIX}arc-${arcIndex}`,
         type: 'text',
@@ -377,11 +391,11 @@ export class StoryboardCanvasManager {
         width: labelWidth,
         height: labelHeight,
         color: colors[arcIndex % colors.length],
-      } as any);
+      });
       arcIndex++;
     }
 
-    // Add date markers (top row)
+    // Add date markers
     let dateIndex = 0;
     for (const [dateLabel, x] of dateXPositions) {
       canvasData.nodes.push({
@@ -393,32 +407,28 @@ export class StoryboardCanvasManager {
         width: labelWidth,
         height: labelHeight,
         color: '0',
-      } as any);
+      });
       dateIndex++;
     }
 
-    // Add per-node date labels (directly above each file node)
+    // Add per-node date labels
     const nodeLabelHeight = 40;
     for (const scene of scenes) {
-      const node = canvas.nodes.get(scene.nodeId);
+      const node = canvasData.nodes.find((n: any) => n.id === scene.nodeId);
       if (!node) continue;
-      const data = node.getData();
+      
       const dateLabel = formatAbstractDate(scene.date, this.dateSettings);
-
       canvasData.nodes.push({
         id: `${this.MARKER_PREFIX}nodelabel-${scene.nodeId}`,
         type: 'text',
         text: dateLabel,
-        x: data.x,
-        y: data.y - nodeLabelHeight - 10,
+        x: node.x,
+        y: node.y - nodeLabelHeight - 10,
         width: this.layoutConfig.nodeWidth,
         height: nodeLabelHeight,
         color: '0',
-      } as any);
+      });
     }
-
-    canvas.setData(canvasData);
-    canvas.requestSave();
   }
 
   // ─── Sync ────────────────────────────────────────────────
