@@ -128,6 +128,31 @@ export class StoryboardInspectorView extends ItemView {
     headerEl.createEl('h3', { text: node.file.basename });
     headerEl.createEl('div', { text: 'Storyboard Node', cls: 'storyflow-subtext' });
 
+    // Global Canvas Switcher
+    const switchContainer = innerContainer.createDiv({ cls: 'storyboard-inspector-card' });
+    switchContainer.createEl('h4', { text: 'Canvas View Mode', cls: 'storyboard-inspector-card-title' });
+    
+    new Setting(switchContainer)
+      .setName('Layout Sequence')
+      .setDesc(this.plugin.settings.layoutConfig.layoutMode === 'absolute' 
+        ? 'Strict timeline spacing' 
+        : 'Evenly distributed layout')
+      .addDropdown(dropdown => dropdown
+        .addOption('absolute', 'Absolute Time')
+        .addOption('ordered', 'Ordered Sequence')
+        .setValue(this.plugin.settings.layoutConfig.layoutMode)
+        .onChange(async (value: 'absolute' | 'ordered') => {
+          this.plugin.settings.layoutConfig.layoutMode = value;
+          await this.plugin.saveSettings();
+          
+          const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+          if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
+          
+          this.activeNodeId = null; // force clean state
+          this.onOpen(); // fully repaint the Sidebar so the desc string updates
+        }));
+
+
     const cache = this.app.metadataCache.getFileCache(node.file);
     const fm: Record<string, any> = cache?.frontmatter || {};
 
@@ -294,6 +319,8 @@ export class StoryboardInspectorView extends ItemView {
           }
           if (val !== currentArc) {
             await setFrontmatterKey(this.app, node.file!, 'story-arc', val);
+            const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+            if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
           }
         });
       });
@@ -308,6 +335,8 @@ export class StoryboardInspectorView extends ItemView {
           const val = text.getValue().trim();
           if (val && val !== currentArc) {
             await setFrontmatterKey(this.app, node.file!, 'story-arc', val);
+            const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+            if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
           }
         };
         text.inputEl.addEventListener('blur', saveArc);
@@ -343,6 +372,8 @@ export class StoryboardInspectorView extends ItemView {
             const regex = this.plugin.settings.dateSettings.dateParserRegex;
             if (new RegExp(regex).test(val)) {
               await setFrontmatterKey(this.app, node.file!, 'story-date', val);
+              const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+              if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
             } else {
               new Notice('Invalid date format for Storyboard');
             }
@@ -560,6 +591,9 @@ export class ShowDependenciesModal extends Modal {
                     }
 
                     new Notice(`Removed dependency: ${dep.basename}`);
+                    
+                    const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+                    if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
                     
                     // Filter the deleted item from UI state to avoid a disruptive entire modal reload
                     this.currentDeps = this.currentDeps.filter(d => d.basename !== dep.basename);

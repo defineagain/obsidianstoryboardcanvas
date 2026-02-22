@@ -107,6 +107,10 @@ export class SetDateModal extends Modal {
 
     await setFrontmatterKey(this.app, this.file, 'story-date', trimmed);
     new Notice(`Set story-date: ${trimmed}`);
+    
+    const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+    if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
+    
     this.close();
     this.onComplete();
   }
@@ -165,6 +169,10 @@ export class SetArcModal extends SuggestModal<string> {
 
     await setFrontmatterKey(this.app, this.file, 'story-arc', arcName);
     new Notice(`Set story-arc: ${arcName}`);
+    
+    const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+    if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
+    
     this.onComplete();
   }
 }
@@ -216,12 +224,14 @@ export class SetDependenciesModal extends SuggestModal<TFile> {
 }
 
 class DependencyTypeModal extends Modal {
+  private plugin: StoryboardCanvasPlugin;
   private file: TFile;
   private targetBasename: string;
   private onComplete: () => void;
 
   constructor(plugin: StoryboardCanvasPlugin, file: TFile, targetBasename: string, onComplete: () => void) {
     super(plugin.app);
+    this.plugin = plugin;
     this.file = file;
     this.targetBasename = targetBasename;
     this.onComplete = onComplete;
@@ -275,6 +285,9 @@ class DependencyTypeModal extends Modal {
     } else {
       new Notice(`Added one-way dependency: ${depStr}`);
     }
+    
+    const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+    if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
   }
 
   onClose() {
@@ -338,6 +351,10 @@ export class SetTensionModal extends Modal {
   private async save(): Promise<void> {
     await setFrontmatterKey(this.app, this.file, 'tension', this.value);
     new Notice(`Set tension: ${this.value}`);
+    
+    const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+    if (activeCanvas) await this.plugin.canvasManager.sortStoryboard(activeCanvas);
+    
     this.close();
     this.onComplete();
   }

@@ -26,18 +26,6 @@ export class StoryboardSettingTab extends PluginSettingTab {
     containerEl.createEl('h2', { text: 'Storyboard Canvas Settings' });
 
     new Setting(containerEl)
-      .setName('Layout Mode')
-      .setDesc('Absolute: position nodes strictly by time elapsed on X-axis. Ordered: distribute nodes evenly in sequence on X-axis.')
-      .addDropdown(dropdown => dropdown
-        .addOption('absolute', 'Absolute Time Graph')
-        .addOption('ordered', 'Ordered Sequence')
-        .setValue(this.plugin.settings.layoutConfig.layoutMode)
-        .onChange(async (value: 'absolute' | 'ordered') => {
-          this.plugin.settings.layoutConfig.layoutMode = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
       .setName('Date Parser Regex')
       .setDesc('Regex with named capture groups (?<y>, ?<M>, ?<d>) to extract dates from story-date.')
       .addText(text => text
