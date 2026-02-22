@@ -216,6 +216,47 @@ export class StoryboardInspectorView extends ItemView {
       windowDesc = `Allowed: ${eStr} ➔ ${lStr}\nBounded by: [${earliestSource}] and [${latestSource}]`;
     }
 
+    // --- Timeline Nudge Card ---
+    const timelineCard = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
+    timelineCard.createEl('h4', { text: 'Timeline Nudge', cls: 'timeline-slider-header' });
+    timelineCard.createEl('p', { 
+      text: 'Slide left/right to move the node on the timeline. Release to sync changes to frontmatter.',
+      cls: 'setting-item-description'
+    });
+
+    const sliderContainer = timelineCard.createDiv({ cls: 'timeline-slider-container' });
+    const slider = sliderContainer.createEl('input', { cls: 'storyflow-nudge-slider' });
+    slider.type = 'range';
+    slider.style.width = '100%';
+    
+    // We treat the slider as ±1000 pixels from its CURRENT canvas location
+    const startX = node.x;
+    slider.min = (startX - 1000).toString();
+    slider.max = (startX + 1000).toString();
+    slider.value = startX.toString();
+
+    // Input fires continuously while dragging
+    slider.addEventListener('input', () => {
+      const newX = parseInt(slider.value, 10);
+      node.setData({ ...node.getData(), x: newX });
+      if(canvas) canvas.requestSave();
+    });
+
+    // Change fires on mouse release
+    slider.addEventListener('change', async () => {
+      // Re-center slider to afford infinite dragging
+      const currentX = node.x;
+      slider.min = (currentX - 1000).toString();
+      slider.max = (currentX + 1000).toString();
+      slider.value = currentX.toString();
+
+      // Trigger the sync engine ONLY for this specific node
+      new Notice('Slider released. Updating node date...');
+      
+      // Calculate new date based on new position relative to others
+      if(canvas) await this.plugin.canvasManager.syncStoryboard(canvas);
+    });
+
     // --- Properties Card ---
     const propsCard = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
     propsCard.createEl('h4', { text: 'Properties' });
@@ -369,49 +410,6 @@ export class StoryboardInspectorView extends ItemView {
             }).open();
         })
       );
-
-
-
-    // --- Timeline Nudge Card ---
-    const timelineCard = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
-    timelineCard.createEl('h4', { text: 'Timeline Nudge', cls: 'timeline-slider-header' });
-    timelineCard.createEl('p', { 
-      text: 'Slide left/right to move the node on the timeline. Release to sync changes to frontmatter.',
-      cls: 'setting-item-description'
-    });
-
-    const sliderContainer = timelineCard.createDiv({ cls: 'timeline-slider-container' });
-    const slider = sliderContainer.createEl('input', { cls: 'storyflow-nudge-slider' });
-    slider.type = 'range';
-    slider.style.width = '100%';
-    
-    // We treat the slider as ±1000 pixels from its CURRENT canvas location
-    const startX = node.x;
-    slider.min = (startX - 1000).toString();
-    slider.max = (startX + 1000).toString();
-    slider.value = startX.toString();
-
-    // Input fires continuously while dragging
-    slider.addEventListener('input', () => {
-      const newX = parseInt(slider.value, 10);
-      node.setData({ ...node.getData(), x: newX });
-      if(canvas) canvas.requestSave();
-    });
-
-    // Change fires on mouse release
-    slider.addEventListener('change', async () => {
-      // Re-center slider to afford infinite dragging
-      const currentX = node.x;
-      slider.min = (currentX - 1000).toString();
-      slider.max = (currentX + 1000).toString();
-      slider.value = currentX.toString();
-
-      // Trigger the sync engine ONLY for this specific node
-      new Notice('Slider released. Updating node date...');
-      
-      // Calculate new date based on new position relative to others
-      if(canvas) await this.plugin.canvasManager.syncStoryboard(canvas);
-    });
   }
 
   // ─── Phase 6 Helpers ───
