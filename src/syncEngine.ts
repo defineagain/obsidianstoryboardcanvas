@@ -3,7 +3,7 @@ import type { Canvas } from './Canvas';
 import type { StoryEvent, LayoutConfig, DateFormatSettings, AbstractDate } from './canvasTypes';
 import { formatAbstractDate } from './dateFormatter';
 import { compareAbstractDates } from './layoutEngine';
-import { setFrontmatterKey } from './taggingModals';
+import { setFrontmatterKey } from './utils';
 
 interface SyncChange {
   scene: StoryEvent;

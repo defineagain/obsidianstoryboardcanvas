@@ -5,13 +5,15 @@
 // arranges linked documents on X=time, Y=arc, and draws
 // chronological + cross-link edges.
 
-import { App, Notice, TFile } from 'obsidian';
-import type { Canvas, CanvasNode, CanvasEdgeData, CanvasNodeData } from './Canvas';
-import type { StoryEvent, LayoutConfig, DateFormatSettings } from './canvasTypes';
+import { App, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import type { Canvas, CanvasNode, CanvasEdge, CanvasData } from './Canvas';
+import type { StoryEvent, LayoutConfig, DateFormatSettings, AbstractDate } from './canvasTypes';
 import { DEFAULT_LAYOUT_CONFIG, DEFAULT_DATE_FORMAT_SETTINGS } from './canvasTypes';
 import { getAbstractDateFromMetadata, getArcFromMetadata, getTitleFromMetadata } from './dateParser';
 import { formatAbstractDate, calculateDateInterval } from './dateFormatter';
 import { calculateLayout, compareAbstractDates } from './layoutEngine';
+import { calculateSyncChanges } from './syncEngine';
+import { setFrontmatterKey } from './taggingModals';
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -446,10 +448,6 @@ export class StoryboardCanvasManager {
       new Notice('No scenes with story-date found.');
       return;
     }
-    
-    const { calculateSyncChanges } = await import('./syncEngine');
-    const { setFrontmatterKey } = await import('./taggingModals');
-    const { formatAbstractDate } = await import('./dateFormatter');
     
     const changes = await calculateSyncChanges(this.app, canvas, scenes, this.layoutConfig, this.dateSettings);
     

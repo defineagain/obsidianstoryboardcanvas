@@ -49,12 +49,12 @@ export class StoryboardInspectorView extends ItemView {
     // Phase 6: Sync UI when frontmatter dependencies change
     this.registerEvent(
       this.app.metadataCache.on('changed', (file) => {
-        if (!this.activeNodeId) return;
+        if (!this.activeNodeId || !this.container) return;
         
         // Don't interrupt if the user is actively typing in a text field!
-        if (this.container?.contains(document.activeElement)) return;
+        if (this.container.contains(document.activeElement)) return;
         
-        const canvas = this.plugin.canvasManager.getActiveCanvas();
+        const canvas = this.plugin?.canvasManager?.getActiveCanvas();
         if (!canvas) return;
         
         const targetNode = canvas.nodes.get(this.activeNodeId);
@@ -83,24 +83,26 @@ export class StoryboardInspectorView extends ItemView {
     const switchContainer = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
     switchContainer.createEl('h4', { text: 'Canvas View Mode', cls: 'storyboard-inspector-card-title' });
     
-    new Setting(switchContainer)
-      .setName('Layout Sequence')
-      .setDesc(this.plugin.settings.layoutConfig.layoutMode === 'absolute' 
-        ? 'Strict timeline spacing' 
-        : 'Evenly distributed layout')
-      .addDropdown(dropdown => dropdown
-        .addOption('absolute', 'Absolute Time')
-        .addOption('ordered', 'Ordered Sequence')
-        .setValue(this.plugin.settings.layoutConfig.layoutMode)
-        .onChange(async (value: 'absolute' | 'ordered') => {
-          this.plugin.settings.layoutConfig.layoutMode = value;
-          await this.plugin.saveSettings();
-          
-          const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
-          if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
-          
-          this.onOpen(); 
-        }));
+    if (this.plugin?.settings?.layoutConfig) {
+      new Setting(switchContainer)
+        .setName('Layout Sequence')
+        .setDesc(this.plugin.settings.layoutConfig.layoutMode === 'absolute' 
+          ? 'Strict timeline spacing' 
+          : 'Evenly distributed layout')
+        .addDropdown(dropdown => dropdown
+          .addOption('absolute', 'Absolute Time')
+          .addOption('ordered', 'Ordered Sequence')
+          .setValue(this.plugin.settings.layoutConfig.layoutMode)
+          .onChange(async (value: 'absolute' | 'ordered') => {
+            this.plugin.settings.layoutConfig.layoutMode = value;
+            await this.plugin.saveSettings();
+            
+            const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+            if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
+            
+            this.onOpen(); 
+          }));
+    }
 
     innerContainer.createDiv({ 
       text: 'Select a single file node on the canvas to inspect it.', 
@@ -113,12 +115,14 @@ export class StoryboardInspectorView extends ItemView {
   }
 
   pollSelection() {
+    if (!this.container) return;
+
     // DO NOT re-render if the user is actively typing in one of our input fields!
-    if (this.container?.contains(document.activeElement)) {
+    if (this.container.contains(document.activeElement)) {
       return; 
     }
 
-    const canvas = this.plugin.canvasManager.getActiveCanvas();
+    const canvas = this.plugin?.canvasManager?.getActiveCanvas();
     if (!canvas) {
       if (this.activeNodeId !== null) this.renderEmptyState();
       return;

@@ -1,6 +1,6 @@
 {
   "name": "obsidian-storyboard-canvas",
-  "version": "0.8.7",
+  "version": "0.8.7.1",
   "description": "Transforms Obsidian's native Canvas into a visual timeline for planning narrative structures.",
   "main": "main.js",
   "scripts": {
