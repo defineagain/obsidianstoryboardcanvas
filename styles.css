@@ -59,6 +59,17 @@
   margin: 0 !important;
 }
 
+.storyflow-empty-state-card {
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 10px;
+}
+
 .storyflow-inspector-card .setting-item-info {
   margin-right: 8px;
 }

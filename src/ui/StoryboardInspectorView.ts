@@ -76,10 +76,37 @@ export class StoryboardInspectorView extends ItemView {
 
   renderEmptyState() {
     this.container.empty();
-    this.container.createEl('p', { 
+    
+    const innerContainer = this.container.createDiv({ cls: 'storyboard-inspector-inner' });
+    
+    // Global Canvas Switcher remains active even when nothing is selected
+    const switchContainer = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
+    switchContainer.createEl('h4', { text: 'Canvas View Mode', cls: 'storyboard-inspector-card-title' });
+    
+    new Setting(switchContainer)
+      .setName('Layout Sequence')
+      .setDesc(this.plugin.settings.layoutConfig.layoutMode === 'absolute' 
+        ? 'Strict timeline spacing' 
+        : 'Evenly distributed layout')
+      .addDropdown(dropdown => dropdown
+        .addOption('absolute', 'Absolute Time')
+        .addOption('ordered', 'Ordered Sequence')
+        .setValue(this.plugin.settings.layoutConfig.layoutMode)
+        .onChange(async (value: 'absolute' | 'ordered') => {
+          this.plugin.settings.layoutConfig.layoutMode = value;
+          await this.plugin.saveSettings();
+          
+          const activeCanvas = this.plugin.canvasManager.getActiveCanvas();
+          if (activeCanvas) await this.plugin.canvasManager.buildStoryboard(activeCanvas);
+          
+          this.onOpen(); 
+        }));
+
+    innerContainer.createDiv({ 
       text: 'Select a single file node on the canvas to inspect it.', 
-      cls: 'empty-state' 
+      cls: 'storyflow-empty-state-card' 
     });
+    
     this.activeNodeId = null;
     this.showConstraintWindow = false;
     this.clearConstraintOverlays();
@@ -129,7 +156,7 @@ export class StoryboardInspectorView extends ItemView {
     headerEl.createEl('div', { text: 'Storyboard Node', cls: 'storyflow-subtext' });
 
     // Global Canvas Switcher
-    const switchContainer = innerContainer.createDiv({ cls: 'storyboard-inspector-card' });
+    const switchContainer = innerContainer.createDiv({ cls: 'storyflow-inspector-card' });
     switchContainer.createEl('h4', { text: 'Canvas View Mode', cls: 'storyboard-inspector-card-title' });
     
     new Setting(switchContainer)
