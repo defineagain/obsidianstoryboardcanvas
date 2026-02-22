@@ -381,7 +381,7 @@ export class StoryboardInspectorView extends ItemView {
     });
 
     const sliderContainer = timelineCard.createDiv({ cls: 'timeline-slider-container' });
-    const slider = sliderContainer.createEl('input', { cls: 'slider' });
+    const slider = sliderContainer.createEl('input', { cls: 'storyflow-nudge-slider' });
     slider.type = 'range';
     slider.style.width = '100%';
     
