@@ -37,15 +37,7 @@ Click the **Clapperboard icon** in Obsidian's left ribbon to open the Inspector 
 - **Arc Selection Dropdown**: Quickly switch the note to a different plot arc without typing YAML by hand.
 - **Dependencies Manager**: Click `+ Add Dependency` to define strict rules (e.g., "Scene A MUST happen *before* Scene B"). The Inspector mathematically calculates exactly which dates you are allowed to choose based on these dependencies to keep your continuity flawless!
 
-### Canvas Quick Menu
-Select a node on the canvas, and you'll see a small **Calendar icon** magically injected into Obsidian's floating node menu. Click it to instantly edit the note's date without leaving the canvas.
 
-## 👻 Top-Down Outlining (Ghost Nodes)
-Are you missing a scene between two events in your timeline? You don't have to create it in the file explorer first!
-
-1. Hold `Shift` and **Double-Click** anywhere on the empty canvas background.
-2. The plugin reads the exact `X` (Time) and `Y` (Arc) coordinates under your cursor.
-3. A new "Ghost Node" file is instantly generated, pre-filled with the exact interpolated Date and Arc, and dropped right beneath your cursor, ready for you to type a title.
 
 ## 🌡️ Tension Heatmaps
 Want to visualize the dramatic pacing of your story? 

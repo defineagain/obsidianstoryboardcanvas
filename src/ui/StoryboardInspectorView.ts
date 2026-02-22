@@ -373,15 +373,25 @@ export class StoryboardInspectorView extends ItemView {
           .setDynamicTooltip()
           .onChange(async (v) => {
             currentTension = v;
-            tensionDisplay.setText(`Tension Level: ${v}`);
             
-            // Note: Canvas selection polling could interfere if we fire this instantly on every tiny drag.
-            // But since this is a slider that we release to finalize, we can update frontmatter immediately.
+            // Fires on release. We officially update the Frontmatter now.
             await setFrontmatterKey(this.app, node.file!, 'tension', v);
             
-            // Re-render the node explicitly so it glow updates on the canvas right away.
-            if(canvas) this.plugin.canvasManager.sortStoryboard(canvas); // Hack to trigger CSS update
+            // Re-render the node explicitly (forces sort layout consistency)
+            if(canvas) this.plugin.canvasManager.sortStoryboard(canvas);
           });
+          
+        // Add real-time continuous visual feedback during the drag
+        slider.sliderEl.addEventListener('input', () => {
+            const v = parseInt(slider.sliderEl.value);
+            tensionDisplay.setText(`Tension Level: ${v}`);
+            
+            // Instantly hot-swap classes on the actual DOM element
+            if (node.nodeEl) {
+                for (let t = 1; t <= 10; t++) node.nodeEl.classList.remove(`storyboard-tension-${t}`);
+                node.nodeEl.classList.add(`storyboard-tension-${v}`);
+            }
+        });
       });
 
     // --- Dependencies Card ---
